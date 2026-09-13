@@ -1,108 +1,89 @@
-import { useState } from 'react';
-import CodeBlock from './components/CodeBlock';
-import { codeFiles } from './data/codeFiles';
+import { useState, useMemo } from 'react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { sourceFiles } from './data/sourceCode';
+import { documentation } from './data/documentation';
 
-type Section = 'overview' | 'architecture' | 'pipeline' | 'code' | 'decisions' | 'readme';
+type Section = 'overview' | 'architecture' | 'pipeline' | 'source' | 'experiments' | 'docs' | 'metrics';
 
 const navItems: { id: Section; label: string; icon: string }[] = [
   { id: 'overview', label: 'Overview', icon: '🏠' },
   { id: 'architecture', label: 'Architecture', icon: '🏗️' },
   { id: 'pipeline', label: 'Pipeline', icon: '⚡' },
-  { id: 'code', label: 'Source Code', icon: '💻' },
-  { id: 'decisions', label: 'Decisions', icon: '🧠' },
-  { id: 'readme', label: 'README', icon: '📖' },
+  { id: 'source', label: 'Source Code', icon: '💻' },
+  { id: 'experiments', label: 'Experiments', icon: '🧪' },
+  { id: 'docs', label: 'Documentation', icon: '📚' },
+  { id: 'metrics', label: 'Metrics', icon: '📊' },
 ];
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<Section>('overview');
-  const [activeFile, setActiveFile] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const renderContent = () => {
     switch (activeSection) {
-      case 'overview':
-        return <OverviewSection />;
-      case 'architecture':
-        return <ArchitectureSection />;
-      case 'pipeline':
-        return <PipelineSection />;
-      case 'code':
-        return <CodeSection activeFile={activeFile} setActiveFile={setActiveFile} />;
-      case 'decisions':
-        return <DecisionsSection />;
-      case 'readme':
-        return <ReadmeSection />;
-      default:
-        return null;
+      case 'overview': return <OverviewSection onNavigate={setActiveSection} />;
+      case 'architecture': return <ArchitectureSection />;
+      case 'pipeline': return <PipelineSection />;
+      case 'source': return <SourceSection />;
+      case 'experiments': return <ExperimentsSection />;
+      case 'docs': return <DocsSection />;
+      case 'metrics': return <MetricsSection />;
+      default: return null;
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-      {/* Top Navigation */}
-      <header className="sticky top-0 z-50 bg-gray-950/80 backdrop-blur-xl border-b border-gray-800/50">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-lg font-bold text-gray-900">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-sm font-bold text-gray-900">
                 R
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-white leading-tight">RAG Pipeline</h1>
-                <p className="text-xs text-gray-500 leading-tight">PDF Q&A with LangChain</p>
+              <div className="hidden sm:block">
+                <h1 className="text-sm font-bold text-white leading-tight">RAG Pipeline</h1>
+                <p className="text-[10px] text-gray-500 leading-tight">Research-Grade Document Intelligence</p>
               </div>
             </div>
-
-            {/* Desktop nav */}
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden lg:flex items-center gap-0.5">
               {navItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => setActiveSection(item.id)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                     activeSection === item.id
                       ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
                 >
-                  <span className="mr-1.5">{item.icon}</span>
-                  {item.label}
+                  <span className="mr-1">{item.icon}</span>{item.label}
                 </button>
               ))}
             </nav>
-
-            {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800"
+              className="lg:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800"
             >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                )}
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
               </svg>
             </button>
           </div>
         </div>
-
-        {/* Mobile nav */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-800/50 bg-gray-950/95 backdrop-blur-xl">
-            <div className="px-4 py-3 space-y-1">
+          <div className="lg:hidden border-t border-gray-800/50 bg-gray-950/95 backdrop-blur-xl">
+            <div className="px-4 py-2 space-y-0.5">
               {navItems.map((item) => (
-                <button
-                  key={item.id}
+                <button key={item.id}
                   onClick={() => { setActiveSection(item.id); setMobileMenuOpen(false); }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    activeSection === item.id
-                      ? 'bg-emerald-500/10 text-emerald-400'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                  }`}
-                >
-                  <span className="mr-2">{item.icon}</span>
-                  {item.label}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeSection === item.id ? 'bg-emerald-500/10 text-emerald-400' : 'text-gray-400 hover:text-white'
+                  }`}>
+                  <span className="mr-2">{item.icon}</span>{item.label}
                 </button>
               ))}
             </div>
@@ -110,90 +91,115 @@ export default function App() {
         )}
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
         {renderContent()}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800/50 py-6 text-center text-sm text-gray-600">
-        <p>Built with LangChain • Chroma • OpenAI • An educational RAG implementation</p>
+      <footer className="border-t border-gray-800/50 py-4 text-center text-xs text-gray-600">
+        Research-Grade RAG Pipeline • LangChain • ChromaDB • Hybrid Retrieval • Evaluation Framework
       </footer>
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────────────────
-   Section Components
-   ───────────────────────────────────────────────────────── */
-
-function OverviewSection() {
+/* ═══════════════════════════════════════════════════════════
+   OVERVIEW SECTION
+   ═══════════════════════════════════════════════════════════ */
+function OverviewSection({ onNavigate }: { onNavigate: (s: Section) => void }) {
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       {/* Hero */}
-      <div className="text-center py-12 space-y-6">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          Educational RAG Pipeline
+      <div className="text-center py-8 space-y-5">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+          Research-Grade RAG System
         </div>
-        <h2 className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
-          Ask Questions About<br />Your PDF Documents
+        <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent leading-tight">
+          Document-Grounded QA<br />with Experimental Validation
         </h2>
-        <p className="max-w-2xl mx-auto text-lg text-gray-400 leading-relaxed">
-          A complete, self-contained Retrieval-Augmented Generation system. Drop PDFs into a folder,
-          ask natural-language questions, get accurate answers with source citations — all running locally.
+        <p className="max-w-2xl mx-auto text-sm text-gray-400 leading-relaxed">
+          A modular RAG pipeline that investigates how retrieval strategy, chunking, reranking,
+          and abstention affect factual reliability, citation accuracy, and cost.
+          Every architectural decision is measured, not assumed.
         </p>
-        <div className="flex flex-wrap justify-center gap-4 pt-4">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
-            <span className="text-lg">🆓</span>
-            <span className="text-sm text-gray-300">Free local embeddings</span>
+      </div>
+
+      {/* Key principles */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { icon: '🎯', title: 'Faithfulness First', desc: 'Answers grounded in evidence, not hallucination' },
+          { icon: '📏', title: 'Measured, Not Claimed', desc: 'Every component validated by experiments' },
+          { icon: '🔬', title: 'Failure Analysis', desc: 'Formal taxonomy of how and why systems fail' },
+          { icon: '🔄', title: 'Reproducible', desc: 'Config snapshots, locked deps, experiment tracking' },
+        ].map(p => (
+          <div key={p.title} className="p-4 rounded-xl bg-gray-900/50 border border-gray-800/50">
+            <span className="text-xl">{p.icon}</span>
+            <h4 className="font-semibold text-white text-sm mt-2">{p.title}</h4>
+            <p className="text-xs text-gray-500 mt-1">{p.desc}</p>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
-            <span className="text-lg">💾</span>
-            <span className="text-sm text-gray-300">Persistent vector store</span>
-          </div>
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
-            <span className="text-lg">📎</span>
-            <span className="text-sm text-gray-300">Source citations</span>
-          </div>
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
-            <span className="text-lg">⚙️</span>
-            <span className="text-sm text-gray-300">Fully configurable</span>
-          </div>
+        ))}
+      </div>
+
+      {/* Priority stack */}
+      <div className="p-5 rounded-xl bg-gray-900/50 border border-gray-800/50">
+        <h3 className="font-bold text-white mb-3">Priority Stack</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          {['FAITHFULNESS', 'RETRIEVAL QUALITY', 'TRACEABILITY', 'PERFORMANCE', 'UX'].map((p, i) => (
+            <div key={p} className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-md text-xs font-mono font-bold ${
+                i === 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                i === 1 ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20' :
+                i === 2 ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20' :
+                i === 3 ? 'bg-purple-500/15 text-purple-400 border border-purple-500/20' :
+                'bg-gray-700/50 text-gray-400 border border-gray-600/30'
+              }`}>{p}</span>
+              {i < 4 && <span className="text-gray-600 text-xs">{'>'}</span>}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Quick start */}
-      <div className="grid md:grid-cols-2 gap-8">
+      {/* What this project investigates */}
+      <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <h3 className="text-2xl font-bold text-white">What is RAG?</h3>
-          <p className="text-gray-400 leading-relaxed">
-            <strong className="text-gray-200">Retrieval-Augmented Generation</strong> combines the power of
-            large language models with your own documents. Instead of relying solely on training data,
-            the LLM receives relevant context retrieved from your files — producing answers that are
-            grounded in your actual documents.
-          </p>
-          <p className="text-gray-400 leading-relaxed">
-            This project implements the two core stages: <strong className="text-emerald-400">ingestion</strong> (loading,
-            chunking, embedding, storing) and <strong className="text-cyan-400">querying</strong> (retrieving, prompting,
-            generating, citing). Each stage is explained with inline comments and architectural decisions.
-          </p>
+          <h3 className="text-xl font-bold text-white">Research Questions</h3>
+          <div className="space-y-2">
+            {[
+              'Does hybrid retrieval (dense + BM25) outperform dense-only?',
+              'Does cross-encoder reranking improve citation accuracy?',
+              'Which chunking strategy produces the best retrieval quality?',
+              'Can abstention reduce hallucination without excessive false refusals?',
+              'What is the latency/cost tradeoff of each pipeline component?',
+            ].map((q, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-emerald-400 font-mono text-xs mt-0.5 shrink-0">RQ{i+1}</span>
+                <span className="text-gray-400">{q}</span>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="space-y-4">
-          <h3 className="text-2xl font-bold text-white">Tech Stack</h3>
-          <div className="space-y-3">
+          <h3 className="text-xl font-bold text-white">System Components</h3>
+          <div className="grid grid-cols-2 gap-2">
             {[
-              { name: 'LangChain', desc: 'Orchestration framework for LLM apps', color: 'from-green-400 to-emerald-500' },
-              { name: 'ChromaDB', desc: 'Persistent local vector database', color: 'from-blue-400 to-indigo-500' },
-              { name: 'OpenAI GPT-4o-mini', desc: 'Fast, cheap answer generation', color: 'from-purple-400 to-pink-500' },
-              { name: 'sentence-transformers', desc: 'Free local embedding model', color: 'from-orange-400 to-red-500' },
-              { name: 'PyPDF', desc: 'PDF text extraction', color: 'from-cyan-400 to-blue-500' },
-            ].map((tech) => (
-              <div key={tech.name} className="flex items-start gap-3 p-3 rounded-lg bg-gray-900/50 border border-gray-800/50">
-                <div className={`w-2 h-2 mt-2 rounded-full bg-gradient-to-r ${tech.color} shrink-0`}></div>
+              { label: 'PDF Parser', phase: 'Phase 3' },
+              { label: '4 Chunking Strategies', phase: 'Phase 4' },
+              { label: 'Dense Retrieval', phase: 'Phase 5' },
+              { label: 'BM25 Retrieval', phase: 'Phase 5' },
+              { label: 'Hybrid Fusion (RRF)', phase: 'Phase 5' },
+              { label: 'Cross-Encoder Rerank', phase: 'Phase 5' },
+              { label: 'Citation Validation', phase: 'Phase 8' },
+              { label: 'Abstention System', phase: 'Phase 9' },
+              { label: 'Evaluation Framework', phase: 'Phase 6-7' },
+              { label: 'Experiment Runner', phase: 'Phase 11' },
+              { label: 'Failure Analysis', phase: 'Phase 13' },
+              { label: 'FastAPI Server', phase: 'Phase 19' },
+            ].map(c => (
+              <div key={c.label} className="flex items-center gap-2 p-2 rounded-lg bg-gray-800/30 border border-gray-800/50">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/60"></div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-200">{tech.name}</p>
-                  <p className="text-xs text-gray-500">{tech.desc}</p>
+                  <p className="text-xs text-gray-300">{c.label}</p>
+                  <p className="text-[10px] text-gray-600">{c.phase}</p>
                 </div>
               </div>
             ))}
@@ -201,324 +207,225 @@ function OverviewSection() {
         </div>
       </div>
 
-      {/* Cost callout */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-500/5 to-cyan-500/5 border border-emerald-500/20">
-        <div className="flex items-start gap-4">
-          <span className="text-3xl">💰</span>
-          <div>
-            <h4 className="font-bold text-white text-lg">Cost: ~$0.10 for 100 queries</h4>
-            <p className="text-gray-400 text-sm mt-1">
-              Local embeddings are free. GPT-4o-mini costs ~$0.001 per query. The entire pipeline
-              runs at near-zero cost during development.
-            </p>
-          </div>
-        </div>
+      {/* Quick navigation */}
+      <div className="grid sm:grid-cols-3 gap-3">
+        <button onClick={() => onNavigate('source')}
+          className="p-4 rounded-xl bg-gray-900/50 border border-gray-800/50 hover:border-emerald-500/30 transition-all text-left group">
+          <span className="text-lg">💻</span>
+          <h4 className="font-semibold text-white text-sm mt-2 group-hover:text-emerald-400 transition-colors">Source Code</h4>
+          <p className="text-xs text-gray-500 mt-1">Complete Python implementation with comments</p>
+        </button>
+        <button onClick={() => onNavigate('experiments')}
+          className="p-4 rounded-xl bg-gray-900/50 border border-gray-800/50 hover:border-cyan-500/30 transition-all text-left group">
+          <span className="text-lg">🧪</span>
+          <h4 className="font-semibold text-white text-sm mt-2 group-hover:text-cyan-400 transition-colors">Experiments</h4>
+          <p className="text-xs text-gray-500 mt-1">Ablation studies and configuration comparison</p>
+        </button>
+        <button onClick={() => onNavigate('docs')}
+          className="p-4 rounded-xl bg-gray-900/50 border border-gray-800/50 hover:border-purple-500/30 transition-all text-left group">
+          <span className="text-lg">📚</span>
+          <h4 className="font-semibold text-white text-sm mt-2 group-hover:text-purple-400 transition-colors">Documentation</h4>
+          <p className="text-xs text-gray-500 mt-1">Architecture, decisions, security, reproducibility</p>
+        </button>
       </div>
     </div>
   );
 }
 
+/* ═══════════════════════════════════════════════════════════
+   ARCHITECTURE SECTION
+   ═══════════════════════════════════════════════════════════ */
 function ArchitectureSection() {
   return (
-    <div className="space-y-12">
-      <div className="text-center space-y-4">
-        <h2 className="text-3xl font-bold text-white">System Architecture</h2>
-        <p className="text-gray-400 max-w-2xl mx-auto">
-          Two-stage pipeline: ingest once, query many times. The vector store persists between runs.
-        </p>
+    <div className="space-y-8">
+      <div className="text-center space-y-3">
+        <h2 className="text-2xl font-bold text-white">System Architecture</h2>
+        <p className="text-sm text-gray-400">Modular pipeline with clean interfaces between stages</p>
       </div>
 
-      {/* Architecture Diagram */}
-      <div className="p-8 rounded-2xl bg-gray-900/50 border border-gray-800/50 overflow-x-auto">
-        <div className="min-w-[700px]">
-          {/* Stage 1: Ingestion */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium">
-                Stage 1: Ingestion
-              </span>
-              <span className="text-gray-600 text-sm">— Run once per document set</span>
+      {/* Ingestion Pipeline */}
+      <div className="p-5 rounded-xl bg-gray-900/50 border border-gray-800/50 overflow-x-auto">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+            Ingestion Pipeline
+          </span>
+          <span className="text-gray-600 text-xs">— Run once per document set</span>
+        </div>
+        <div className="min-w-[600px] flex items-center gap-2 flex-wrap">
+          {[
+            { icon: '📄', label: 'PDFs', sub: 'documents/' },
+            { icon: '🔍', label: 'Parser', sub: 'pypdf + metadata' },
+            { icon: '🏗️', label: 'Structure', sub: 'heading detection' },
+            { icon: '✂️', label: 'Chunker', sub: '4 strategies' },
+            { icon: '🔢', label: 'Embed', sub: 'MiniLM / OpenAI' },
+            { icon: '💾', label: 'Indexes', sub: 'Chroma + BM25' },
+          ].map((step, i, arr) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="flex flex-col items-center px-3 py-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 min-w-[90px]">
+                <span className="text-lg">{step.icon}</span>
+                <span className="text-xs font-semibold text-white">{step.label}</span>
+                <span className="text-[10px] text-gray-500">{step.sub}</span>
+              </div>
+              {i < arr.length - 1 && <span className="text-gray-600 text-xs">→</span>}
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <ArchBox icon="📄" title="PDF Files" subtitle="documents/" color="emerald" />
-              <ArchArrow />
-              <ArchBox icon="✂️" title="Chunking" subtitle="RecursiveTextSplitter" color="emerald" />
-              <ArchArrow />
-              <ArchBox icon="🔢" title="Embedding" subtitle="all-MiniLM-L6-v2" color="emerald" />
-              <ArchArrow />
-              <ArchBox icon="💾" title="Chroma DB" subtitle="chroma_db/" color="emerald" />
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-8">
-            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
-            <span className="text-gray-500 text-sm px-3">persistent storage</span>
-            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
-          </div>
-
-          {/* Stage 2: Querying */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-sm font-medium">
-                Stage 2: Querying
-              </span>
-              <span className="text-gray-600 text-sm">— Run for each question</span>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <ArchBox icon="💾" title="Chroma DB" subtitle="(loaded)" color="cyan" />
-              <ArchArrow />
-              <ArchBox icon="🔍" title="Retrieve" subtitle="MMR, top-k=4" color="cyan" />
-              <ArchArrow />
-              <ArchBox icon="📝" title="Prompt" subtitle="context + question" color="cyan" />
-              <ArchArrow />
-              <ArchBox icon="🤖" title="LLM" subtitle="gpt-4o-mini" color="cyan" />
-              <ArchArrow />
-              <ArchBox icon="💬" title="Answer" subtitle="+ sources" color="cyan" />
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* Data flow explanation */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="p-6 rounded-xl bg-gray-900/50 border border-gray-800/50 space-y-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-xl">📄</div>
-          <h4 className="font-bold text-white">Documents → Vectors</h4>
-          <p className="text-sm text-gray-400">
-            Each PDF page is loaded, split into ~800-char chunks with 150-char overlap, then converted
-            to 384-dimensional vectors via sentence-transformers.
-          </p>
+      {/* Query Pipeline */}
+      <div className="p-5 rounded-xl bg-gray-900/50 border border-gray-800/50 overflow-x-auto">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium">
+            Query Pipeline
+          </span>
+          <span className="text-gray-600 text-xs">— Run for each question</span>
         </div>
-        <div className="p-6 rounded-xl bg-gray-900/50 border border-gray-800/50 space-y-3">
-          <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-xl">🔍</div>
-          <h4 className="font-bold text-white">Query → Context</h4>
-          <p className="text-sm text-gray-400">
-            Your question is embedded with the same model, then MMR retrieval finds the 4 most relevant
-            and diverse chunks from the vector store.
-          </p>
+        <div className="min-w-[600px] flex items-center gap-2 flex-wrap">
+          {[
+            { icon: '❓', label: 'Query', sub: 'embed query' },
+            { icon: '🔍', label: 'Dense', sub: 'top-50 cosine' },
+            { icon: '📝', label: 'BM25', sub: 'top-50 lexical' },
+            { icon: '🔀', label: 'RRF Fusion', sub: 'combine signals' },
+            { icon: '⚖️', label: 'Rerank', sub: 'cross-encoder' },
+            { icon: '🤖', label: 'LLM', sub: 'gpt-4o-mini' },
+            { icon: '✅', label: 'Validate', sub: 'citations' },
+          ].map((step, i, arr) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="flex flex-col items-center px-3 py-2 rounded-lg border border-cyan-500/20 bg-cyan-500/5 min-w-[85px]">
+                <span className="text-lg">{step.icon}</span>
+                <span className="text-xs font-semibold text-white">{step.label}</span>
+                <span className="text-[10px] text-gray-500">{step.sub}</span>
+              </div>
+              {i < arr.length - 1 && <span className="text-gray-600 text-xs">→</span>}
+            </div>
+          ))}
         </div>
-        <div className="p-6 rounded-xl bg-gray-900/50 border border-gray-800/50 space-y-3">
-          <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-xl">🤖</div>
-          <h4 className="font-bold text-white">Context → Answer</h4>
-          <p className="text-sm text-gray-400">
-            The retrieved chunks are stitched into a prompt template with your question, sent to GPT-4o-mini,
-            and the answer is returned with source citations.
-          </p>
-        </div>
+      </div>
+
+      {/* Component details */}
+      <div className="grid md:grid-cols-3 gap-4">
+        {[
+          { title: 'Retrieval', items: ['Dense (cosine similarity)', 'BM25 (lexical matching)', 'RRF fusion', 'Cross-encoder rerank'], color: 'emerald' },
+          { title: 'Generation', items: ['Strict grounding prompt', 'Citation extraction', 'Support-level classification', 'Abstention mechanism'], color: 'cyan' },
+          { title: 'Evaluation', items: ['Recall@K, MRR, nDCG', 'Factual correctness', 'Citation accuracy', 'Failure categorization'], color: 'purple' },
+        ].map(group => (
+          <div key={group.title} className="p-4 rounded-xl bg-gray-900/50 border border-gray-800/50">
+            <h4 className={`font-bold text-sm mb-3 ${
+              group.color === 'emerald' ? 'text-emerald-400' :
+              group.color === 'cyan' ? 'text-cyan-400' : 'text-purple-400'
+            }`}>{group.title}</h4>
+            <ul className="space-y-1.5">
+              {group.items.map(item => (
+                <li key={item} className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="w-1 h-1 rounded-full bg-gray-600"></span>{item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
 
       {/* File structure */}
-      <div className="p-6 rounded-2xl bg-gray-900/50 border border-gray-800/50">
-        <h3 className="text-xl font-bold text-white mb-4">Project Structure</h3>
-        <div className="font-mono text-sm space-y-1 text-gray-400">
-          <p className="text-gray-300 font-semibold">rag-pipeline/</p>
-          <p className="pl-4">├── <span className="text-emerald-400">documents/</span>          <span className="text-gray-600"># Your PDF files go here</span></p>
-          <p className="pl-4">├── <span className="text-yellow-400">chroma_db/</span>          <span className="text-gray-600"># Persisted vector store (auto-created)</span></p>
-          <p className="pl-4">├── <span className="text-cyan-400">ingest.py</span>           <span className="text-gray-600"># Stage 1: load, chunk, embed, store</span></p>
-          <p className="pl-4">├── <span className="text-cyan-400">query.py</span>            <span className="text-gray-600"># Stage 2: retrieve, generate, cite</span></p>
-          <p className="pl-4">├── <span className="text-purple-400">config.py</span>           <span className="text-gray-600"># All configurable constants</span></p>
-          <p className="pl-4">├── <span className="text-gray-400">requirements.txt</span>    <span className="text-gray-600"># Python dependencies</span></p>
-          <p className="pl-4">├── <span className="text-gray-400">.env.example</span>        <span className="text-gray-600"># Template for API keys</span></p>
-          <p className="pl-4">├── <span className="text-gray-400">.env</span>                <span className="text-gray-600"># Your actual keys (gitignored!)</span></p>
-          <p className="pl-4">├── <span className="text-gray-400">DECISIONS.md</span>        <span className="text-gray-600"># Architectural decisions explained</span></p>
-          <p className="pl-4">└── <span className="text-gray-400">README.md</span>           <span className="text-gray-600"># Setup and usage guide</span></p>
+      <div className="p-5 rounded-xl bg-gray-900/50 border border-gray-800/50">
+        <h3 className="font-bold text-white mb-3 text-sm">Project Structure</h3>
+        <div className="font-mono text-xs space-y-0.5 text-gray-400 overflow-x-auto">
+          <p className="text-gray-300 font-semibold">RAG-Pipeline/</p>
+          <p className="pl-3">├── <span className="text-emerald-400">src/</span></p>
+          <p className="pl-6">├── <span className="text-gray-300">core/</span> <span className="text-gray-600">— config, models</span></p>
+          <p className="pl-6">├── <span className="text-gray-300">parsing/</span> <span className="text-gray-600">— PDF parser</span></p>
+          <p className="pl-6">├── <span className="text-gray-300">chunking/</span> <span className="text-gray-600">— 4 strategies</span></p>
+          <p className="pl-6">├── <span className="text-gray-300">embeddings/</span> <span className="text-gray-600">— local + API</span></p>
+          <p className="pl-6">├── <span className="text-gray-300">indexing/</span> <span className="text-gray-600">— ChromaDB + BM25</span></p>
+          <p className="pl-6">├── <span className="text-gray-300">retrieval/</span> <span className="text-gray-600">— hybrid + rerank</span></p>
+          <p className="pl-6">├── <span className="text-gray-300">generation/</span> <span className="text-gray-600">— LLM + citations</span></p>
+          <p className="pl-6">├── <span className="text-gray-300">evaluation/</span> <span className="text-gray-600">— metrics + experiments</span></p>
+          <p className="pl-6">└── <span className="text-gray-300">api/</span> <span className="text-gray-600">— FastAPI server</span></p>
+          <p className="pl-3">├── <span className="text-cyan-400">tests/</span> <span className="text-gray-600">— unit + integration</span></p>
+          <p className="pl-3">├── <span className="text-purple-400">experiments/</span> <span className="text-gray-600">— ablation studies</span></p>
+          <p className="pl-3">├── <span className="text-amber-400">benchmarks/</span> <span className="text-gray-600">— evaluation dataset</span></p>
+          <p className="pl-3">├── <span className="text-gray-300">docs/</span> <span className="text-gray-600">— architecture, decisions, security</span></p>
+          <p className="pl-3">├── <span className="text-gray-300">Dockerfile</span></p>
+          <p className="pl-3">└── <span className="text-gray-300">.github/workflows/ci.yml</span></p>
         </div>
       </div>
     </div>
   );
 }
 
-function ArchBox({ icon, title, subtitle, color }: { icon: string; title: string; subtitle: string; color: string }) {
-  const colorClasses: Record<string, string> = {
-    emerald: 'border-emerald-500/30 bg-emerald-500/5',
-    cyan: 'border-cyan-500/30 bg-cyan-500/5',
-  };
-  return (
-    <div className={`flex flex-col items-center gap-1 px-4 py-3 rounded-xl border ${colorClasses[color]} min-w-[120px]`}>
-      <span className="text-2xl">{icon}</span>
-      <span className="text-sm font-semibold text-white">{title}</span>
-      <span className="text-xs text-gray-500">{subtitle}</span>
-    </div>
-  );
-}
-
-function ArchArrow() {
-  return (
-    <svg className="w-8 h-4 text-gray-600 shrink-0" viewBox="0 0 32 16" fill="none">
-      <path d="M0 8h28m0 0l-6-6m6 6l-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
+/* ═══════════════════════════════════════════════════════════
+   PIPELINE SECTION
+   ═══════════════════════════════════════════════════════════ */
 function PipelineSection() {
-  const [expandedStage, setExpandedStage] = useState<number | null>(0);
+  const [expanded, setExpanded] = useState<number | null>(0);
 
   const stages = [
-    {
-      number: 1,
-      title: 'Load PDFs',
-      icon: '📄',
-      color: 'emerald',
-      description: 'PyPDFDirectoryLoader walks the documents/ folder and extracts text from every PDF page.',
-      details: [
-        'Each page becomes a separate Document object',
-        'Metadata preserved: source file path + page number',
-        'This metadata flows through the entire pipeline for citations',
-        'Handles multi-page PDFs automatically',
-      ],
-      code: `from langchain_community.document_loaders import PyPDFDirectoryLoader
-
-loader = PyPDFDirectoryLoader("documents/")
-documents = loader.load()
-# → [Document(page_content="...", metadata={"source": "file.pdf", "page": 0}), ...]`
-    },
-    {
-      number: 2,
-      title: 'Chunk Documents',
-      icon: '✂️',
-      color: 'green',
-      description: 'RecursiveCharacterTextSplitter breaks pages into overlapping ~800-char chunks.',
-      details: [
-        'Splits at natural boundaries: paragraphs → sentences → words',
-        'Overlap (150 chars) prevents losing info at chunk boundaries',
-        'Chunk size 800 balances context vs. retrieval precision',
-        'Metadata from parent page is inherited by each chunk',
-      ],
-      code: `from langchain.text_splitter import RecursiveCharacterTextSplitter
-
-splitter = RecursiveCharacterTextSplitter(
-    chunk_size=800,
-    chunk_overlap=150,
-    separators=["\\n\\n", "\\n", ". ", " ", ""],
-)
-chunks = splitter.split_documents(documents)`
-    },
-    {
-      number: 3,
-      title: 'Embed & Store',
-      icon: '🔢',
-      color: 'cyan',
-      description: 'Each chunk is converted to a vector and stored in persistent Chroma database.',
-      details: [
-        'all-MiniLM-L6-v2 produces 384-dimensional vectors',
-        'Chroma persists to disk — no re-embedding on restart',
-        'Vectors + metadata + text all stored together',
-        'Swappable to OpenAI embeddings via config change',
-      ],
-      code: `from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
-
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-db = Chroma.from_documents(chunks, embeddings, persist_directory="chroma_db/")
-db.persist()`
-    },
-    {
-      number: 4,
-      title: 'Retrieve',
-      icon: '🔍',
-      color: 'blue',
-      description: 'MMR retrieval finds the top-4 most relevant AND diverse chunks for the query.',
-      details: [
-        'Query is embedded with the SAME model used for documents',
-        'MMR balances relevance with diversity (no near-duplicates)',
-        'fetch_k=20 considers more candidates before selecting top-4',
-        'Returns chunks + their metadata (source, page)',
-      ],
-      code: `retriever = db.as_retriever(
-    search_type="mmr",
-    search_kwargs={"k": 4, "fetch_k": 20},
-)
-docs = retriever.invoke("What is the main topic of chapter 3?")`
-    },
-    {
-      number: 5,
-      title: 'Generate Answer',
-      icon: '🤖',
-      color: 'purple',
-      description: 'Retrieved chunks are stitched into a prompt and sent to the LLM for a grounded answer.',
-      details: [
-        'Prompt template instructs LLM to use ONLY the provided context',
-        'Temperature=0 for deterministic, factual answers',
-        'Source metadata formatted for citation display',
-        'LLM says "I don\'t know" if context is insufficient',
-      ],
-      code: `from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-
-prompt = ChatPromptTemplate.from_template("""
-Answer using only this context:
-{context}
-
-Question: {question}
-""")
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
-chain = {"context": retriever, "question": RunnablePassthrough()} | prompt | llm`
-    },
+    { num: 1, icon: '📄', title: 'Document Parsing', phase: 'Phase 3',
+      desc: 'Robust PDF extraction with structure detection and metadata.',
+      points: ['pypdf for reliable text extraction', 'Header/footer detection and removal', 'Metadata extraction (title, author, pages)', 'Content hashing for deduplication', 'Graceful handling of malformed PDFs', 'File validation (size, type, page count)'] },
+    { num: 2, icon: '✂️', title: 'Chunking', phase: 'Phase 4',
+      desc: 'Four configurable strategies for splitting documents.',
+      points: ['Fixed-size: predictable, simple splitting', 'Sentence-based: never splits mid-sentence', 'Recursive: LangChain-style hierarchical splitting', 'Structure-aware: detects headings and sections', 'Configurable size, overlap, min/max constraints', 'Metadata preserved through all strategies'] },
+    { num: 3, icon: '🔢', title: 'Embedding', phase: 'Phase 5',
+      desc: 'Convert chunks to vectors with swappable providers.',
+      points: ['Local: all-MiniLM-L6-v2 (free, 384-dim)', 'OpenAI: text-embedding-3-small (1536-dim)', 'Batch processing for efficiency', 'Model caching (load once)', 'Normalized embeddings for cosine similarity'] },
+    { num: 4, icon: '💾', title: 'Indexing', phase: 'Phase 5',
+      desc: 'Dual indexing for dense and lexical retrieval.',
+      points: ['ChromaDB: persistent vector store with metadata', 'BM25: lexical index for keyword matching', 'Both persist to disk for fast reload', 'Support incremental updates', 'Cosine similarity for dense search'] },
+    { num: 5, icon: '🔍', title: 'Retrieval', phase: 'Phase 5-6',
+      desc: 'Hybrid retrieval with fusion and reranking.',
+      points: ['Dense: top-50 by cosine similarity', 'BM25: top-50 by lexical score', 'RRF fusion: combines both signals', 'Cross-encoder reranking: precision boost', 'Configurable top-K at each stage', 'Full latency tracking per stage'] },
+    { num: 6, icon: '🤖', title: 'Generation', phase: 'Phase 7-9',
+      desc: 'LLM generation with grounding, citations, and abstention.',
+      points: ['Strict grounding instructions in prompt', 'Citation extraction [CITE:chunk_N]', 'Citation validation against retrieved chunks', 'Support-level classification', 'Explicit abstention when evidence insufficient', 'Confidence scoring from multiple signals'] },
+    { num: 7, icon: '📊', title: 'Evaluation', phase: 'Phase 6-7',
+      desc: 'Comprehensive metrics for retrieval and generation.',
+      points: ['Retrieval: Recall@K, MRR, nDCG', 'Generation: correctness, groundedness, citations', 'System: latency, token usage, cost', 'Abstention: correct refusal rate', 'Failure categorization (14 categories)', 'Experiment tracking with config snapshots'] },
   ];
 
   return (
-    <div className="space-y-8">
-      <div className="text-center space-y-4">
-        <h2 className="text-3xl font-bold text-white">Pipeline Stages</h2>
-        <p className="text-gray-400 max-w-2xl mx-auto">
-          Click each stage to explore what happens and see example code.
-        </p>
+    <div className="space-y-6">
+      <div className="text-center space-y-3">
+        <h2 className="text-2xl font-bold text-white">Pipeline Stages</h2>
+        <p className="text-sm text-gray-400">Each stage is modular, configurable, and measurable</p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {stages.map((stage, idx) => (
-          <div
-            key={idx}
-            className={`rounded-xl border transition-all ${
-              expandedStage === idx
-                ? 'border-emerald-500/30 bg-gray-900/80'
-                : 'border-gray-800/50 bg-gray-900/30 hover:border-gray-700/50'
-            }`}
-          >
-            <button
-              onClick={() => setExpandedStage(expandedStage === idx ? null : idx)}
-              className="w-full flex items-center gap-4 p-5 text-left"
-            >
-              <div className="w-12 h-12 rounded-xl bg-gray-800 flex items-center justify-center text-2xl shrink-0">
-                {stage.icon}
-              </div>
-              <div className="flex-1">
+          <div key={idx} className={`rounded-xl border transition-all ${
+            expanded === idx ? 'border-emerald-500/30 bg-gray-900/80' : 'border-gray-800/50 bg-gray-900/30 hover:border-gray-700/50'
+          }`}>
+            <button onClick={() => setExpanded(expanded === idx ? null : idx)}
+              className="w-full flex items-center gap-3 p-4 text-left">
+              <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-lg shrink-0">{stage.icon}</div>
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-gray-600">STAGE {stage.number}</span>
+                  <span className="text-[10px] font-mono text-gray-600">STAGE {stage.num}</span>
+                  <span className="text-[10px] text-gray-700">•</span>
+                  <span className="text-[10px] text-gray-600">{stage.phase}</span>
                 </div>
-                <h3 className="text-lg font-bold text-white">{stage.title}</h3>
-                <p className="text-sm text-gray-400 mt-0.5">{stage.description}</p>
+                <h3 className="text-sm font-bold text-white">{stage.title}</h3>
+                <p className="text-xs text-gray-500 mt-0.5 truncate">{stage.desc}</p>
               </div>
-              <svg
-                className={`w-5 h-5 text-gray-500 transition-transform ${expandedStage === idx ? 'rotate-180' : ''}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor"
-              >
+              <svg className={`w-4 h-4 text-gray-500 transition-transform shrink-0 ${expanded === idx ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-
-            {expandedStage === idx && (
-              <div className="px-5 pb-5 space-y-4">
+            {expanded === idx && (
+              <div className="px-4 pb-4">
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-semibold text-gray-300">Key Points:</h4>
-                    <ul className="space-y-1.5">
-                      {stage.details.map((detail, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-400">
-                          <span className="text-emerald-400 mt-0.5">•</span>
-                          {detail}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Example Code:</h4>
-                    <div className="rounded-lg overflow-hidden border border-gray-700/50">
-                      <pre className="p-3 bg-gray-800/50 text-xs text-gray-300 font-mono overflow-x-auto whitespace-pre">
-                        {stage.code}
-                      </pre>
-                    </div>
+                  <ul className="space-y-1.5">
+                    {stage.points.map((p, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-gray-400">
+                        <span className="text-emerald-400 mt-0.5 shrink-0">•</span>{p}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="p-3 rounded-lg bg-gray-800/30 border border-gray-800/50">
+                    <p className="text-xs text-gray-500 italic">{stage.desc}</p>
+                    <p className="text-xs text-gray-600 mt-2">
+                      Implementation: <code className="text-emerald-400/70">src/{stage.title.toLowerCase().split(' ')[0]}/</code>
+                    </p>
                   </div>
                 </div>
               </div>
@@ -530,202 +437,483 @@ chain = {"context": retriever, "question": RunnablePassthrough()} | prompt | llm
   );
 }
 
-function CodeSection({ activeFile, setActiveFile }: { activeFile: number; setActiveFile: (n: number) => void }) {
-  const file = codeFiles[activeFile];
+/* ═══════════════════════════════════════════════════════════
+   SOURCE CODE SECTION
+   ═══════════════════════════════════════════════════════════ */
+function SourceSection() {
+  const [activeFile, setActiveFile] = useState(0);
+  const [filterPhase, setFilterPhase] = useState<string>('all');
+
+  const phases = useMemo(() => {
+    const unique = [...new Set(sourceFiles.map(f => f.phase))];
+    return ['all', ...unique.sort()];
+  }, []);
+
+  const filteredFiles = useMemo(() => {
+    if (filterPhase === 'all') return sourceFiles;
+    return sourceFiles.filter(f => f.phase === filterPhase);
+  }, [filterPhase]);
+
+  const file = filteredFiles[activeFile] || filteredFiles[0];
 
   return (
-    <div className="space-y-6">
-      <div className="text-center space-y-4">
-        <h2 className="text-3xl font-bold text-white">Source Code</h2>
-        <p className="text-gray-400 max-w-2xl mx-auto">
-          Complete, commented source code for every file in the project. Click to copy.
-        </p>
+    <div className="space-y-5">
+      <div className="text-center space-y-3">
+        <h2 className="text-2xl font-bold text-white">Source Code</h2>
+        <p className="text-sm text-gray-400">Complete, commented implementation of every component</p>
       </div>
 
-      {/* File tabs */}
-      <div className="flex flex-wrap gap-2">
-        {codeFiles.map((f, idx) => (
-          <button
-            key={idx}
-            onClick={() => setActiveFile(idx)}
-            className={`px-4 py-2 rounded-lg text-sm font-mono transition-all ${
-              activeFile === idx
+      {/* Phase filter */}
+      <div className="flex flex-wrap gap-1.5">
+        {phases.map(phase => (
+          <button key={phase} onClick={() => { setFilterPhase(phase); setActiveFile(0); }}
+            className={`px-2.5 py-1 rounded text-xs font-mono transition-all ${
+              filterPhase === phase
                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                : 'bg-gray-800/50 text-gray-400 border border-gray-700/50 hover:text-white hover:border-gray-600'
-            }`}
-          >
-            {f.name}
+                : 'bg-gray-800/50 text-gray-500 border border-gray-700/50 hover:text-gray-300'
+            }`}>
+            {phase === 'all' ? 'All Files' : phase}
           </button>
         ))}
       </div>
 
-      {/* File description */}
-      <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-900/50 border border-gray-800/50">
-        <span className="text-2xl">
-          {file.name.endsWith('.py') ? '🐍' : file.name.endsWith('.md') ? '📝' : file.name.endsWith('.txt') ? '📋' : '🔧'}
-        </span>
-        <p className="text-gray-300">{file.description}</p>
+      {/* File tabs */}
+      <div className="flex flex-wrap gap-1.5">
+        {filteredFiles.map((f, idx) => (
+          <button key={f.path} onClick={() => setActiveFile(idx)}
+            className={`px-2.5 py-1 rounded text-xs font-mono transition-all truncate max-w-[200px] ${
+              activeFile === idx
+                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                : 'bg-gray-800/30 text-gray-500 border border-gray-800/50 hover:text-gray-300'
+            }`}>
+            {f.path.split('/').pop()}
+          </button>
+        ))}
       </div>
 
-      {/* Code display */}
-      <CodeBlock code={file.code} language={file.language} filename={file.name} />
+      {/* File info */}
+      {file && (
+        <>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900/50 border border-gray-800/50">
+            <span className="text-lg">{file.path.endsWith('.py') ? '🐍' : file.path.endsWith('.json') ? '📋' : file.path.endsWith('.yml') ? '⚙️' : '🐳'}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-mono text-gray-300 truncate">{file.path}</p>
+              <p className="text-xs text-gray-500">{file.description}</p>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-500 shrink-0">{file.phase}</span>
+          </div>
+
+          {/* Code */}
+          <CodeBlock code={file.code} language={file.language} filename={file.path} />
+        </>
+      )}
     </div>
   );
 }
 
-function DecisionsSection() {
-  const decisionsFile = codeFiles.find(f => f.name === 'DECISIONS.md');
+/* ═══════════════════════════════════════════════════════════
+   EXPERIMENTS SECTION
+   ═══════════════════════════════════════════════════════════ */
+function ExperimentsSection() {
+  const experiments = [
+    { id: 'A', name: 'Dense Only', desc: 'Semantic retrieval only', config: 'dense_top_k=50, bm25=disabled, rerank=off' },
+    { id: 'B', name: 'BM25 Only', desc: 'Lexical retrieval only', config: 'bm25_top_k=50, dense=disabled, rerank=off' },
+    { id: 'C', name: 'Hybrid (RRF)', desc: 'Dense + BM25 with RRF fusion', config: 'dense=50, bm25=50, fusion=RRF, rerank=off' },
+    { id: 'D', name: 'Hybrid + Rerank', desc: 'Full pipeline with cross-encoder', config: 'dense=50, bm25=50, fusion=RRF, rerank=on, top_k=5' },
+    { id: 'E-H', name: 'Chunking Strategies', desc: 'Fixed vs Sentence vs Recursive vs Structure', config: 'chunk_size=512, overlap=64, strategy=varies' },
+    { id: 'I-K', name: 'Top-K Sensitivity', desc: 'Final retrieval depth: 3 vs 5 vs 10', config: 'rerank_top_k=3/5/10' },
+    { id: 'L', name: 'Ablation: No Rerank', desc: 'Remove reranking from full pipeline', config: 'Same as D but rerank_enabled=false' },
+    { id: 'M', name: 'Ablation: No BM25', desc: 'Remove BM25 from hybrid', config: 'Same as C but bm25_top_k=0' },
+    { id: 'N', name: 'Ablation: No Dense', desc: 'Remove dense retrieval from hybrid', config: 'Same as C but dense_top_k=0' },
+  ];
+
+  const metrics = [
+    { name: 'Recall@5', desc: 'Fraction of relevant chunks in top-5', status: 'pending' },
+    { name: 'MRR', desc: 'Mean Reciprocal Rank of first relevant result', status: 'pending' },
+    { name: 'nDCG@5', desc: 'Normalized Discounted Cumulative Gain', status: 'pending' },
+    { name: 'Factual Correctness', desc: 'Answer matches expected answer', status: 'pending' },
+    { name: 'Groundedness', desc: 'Answer supported by retrieved evidence', status: 'pending' },
+    { name: 'Citation Accuracy', desc: 'Citations map to actual evidence', status: 'pending' },
+    { name: 'Hallucination Rate', desc: 'Answers with unsupported claims', status: 'pending' },
+    { name: 'Abstention Accuracy', desc: 'Correct refusal on unanswerable questions', status: 'pending' },
+    { name: 'Latency p50', desc: 'Median end-to-end query time', status: 'pending' },
+    { name: 'Latency p95', desc: '95th percentile query time', status: 'pending' },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="text-center space-y-4">
-        <h2 className="text-3xl font-bold text-white">Architectural Decisions</h2>
-        <p className="text-gray-400 max-w-2xl mx-auto">
-          Why we made each choice — the learning companion to the code.
-        </p>
+    <div className="space-y-8">
+      <div className="text-center space-y-3">
+        <h2 className="text-2xl font-bold text-white">Experiment Framework</h2>
+        <p className="text-sm text-gray-400">Systematic comparison of retrieval strategies, chunking, and pipeline components</p>
       </div>
 
-      {/* Decision cards */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <DecisionCard
-          title="RecursiveCharacterTextSplitter"
-          emoji="✂️"
-          decision="Splits at natural boundaries (paragraphs → sentences → words)"
-          alternatives="CharacterTextSplitter (too simple), TokenTextSplitter (slower, needs tiktoken)"
-        />
-        <DecisionCard
-          title="Chunk Size: 800 chars"
-          emoji="📏"
-          decision="Sweet spot: ~2-3 paragraphs, enough context without too much noise"
-          alternatives="< 300: loses context | > 1500: too noisy for retrieval"
-        />
-        <DecisionCard
-          title="ChromaDB over FAISS"
-          emoji="💾"
-          decision="Built-in persistence, metadata filtering, simpler API"
-          alternatives="FAISS: faster but no persistence, no metadata filtering"
-        />
-        <DecisionCard
-          title="Local Embeddings First"
-          emoji="🆓"
-          decision="Zero cost during development, no API key needed"
-          alternatives="OpenAI text-embedding-3-small: better quality, ~$0.02/1M tokens"
-        />
-        <DecisionCard
-          title="MMR Retrieval"
-          emoji="🔍"
-          decision="Balances relevance with diversity — no near-duplicate results"
-          alternatives="Plain similarity: may return 4 nearly-identical chunks"
-        />
-        <DecisionCard
-          title="Temperature = 0.0"
-          emoji="🌡️"
-          decision="Deterministic answers for factual Q&A — no creative interpretation"
-          alternatives="0.7: creative/varied (good for brainstorming, bad for facts)"
-        />
-        <DecisionCard
-          title="GPT-4o-mini"
-          emoji="💰"
-          decision="1/16th the cost of GPT-4o, fast, good enough for RAG tasks"
-          alternatives="GPT-4o: better reasoning, 16x more expensive"
-        />
-        <DecisionCard
-          title="Separate ingest.py / query.py"
-          emoji="📦"
-          decision="Ingestion is expensive (done once); querying is cheap (done many times)"
-          alternatives="Single file: simpler but can't re-query without re-embedding"
-        />
-      </div>
-
-      {/* Full DECISIONS.md */}
-      <div className="pt-4">
-        <h3 className="text-xl font-bold text-white mb-4">Full DECISIONS.md</h3>
-        {decisionsFile && (
-          <CodeBlock code={decisionsFile.code} language="markdown" filename="DECISIONS.md" />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DecisionCard({ title, emoji, decision, alternatives }: {
-  title: string; emoji: string; decision: string; alternatives: string;
-}) {
-  return (
-    <div className="p-5 rounded-xl bg-gray-900/50 border border-gray-800/50 space-y-3">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">{emoji}</span>
-        <h4 className="font-bold text-white">{title}</h4>
-      </div>
-      <div className="space-y-2">
-        <div className="flex items-start gap-2">
-          <span className="text-emerald-400 text-xs mt-1 font-bold">✓</span>
-          <p className="text-sm text-gray-300">{decision}</p>
+      {/* Experiment table */}
+      <div className="rounded-xl border border-gray-800/50 overflow-hidden">
+        <div className="p-3 bg-gray-900/50 border-b border-gray-800/50">
+          <h3 className="text-sm font-bold text-white">Experiment Configurations</h3>
         </div>
-        <div className="flex items-start gap-2">
-          <span className="text-gray-600 text-xs mt-1 font-bold">⚡</span>
-          <p className="text-sm text-gray-500">{alternatives}</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-gray-800/50">
+                <th className="text-left px-3 py-2 text-gray-500 font-medium">ID</th>
+                <th className="text-left px-3 py-2 text-gray-500 font-medium">Name</th>
+                <th className="text-left px-3 py-2 text-gray-500 font-medium hidden sm:table-cell">Description</th>
+                <th className="text-left px-3 py-2 text-gray-500 font-medium hidden md:table-cell">Configuration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {experiments.map(exp => (
+                <tr key={exp.id} className="border-b border-gray-800/30 hover:bg-gray-800/20">
+                  <td className="px-3 py-2 font-mono text-emerald-400">{exp.id}</td>
+                  <td className="px-3 py-2 text-gray-300 font-medium">{exp.name}</td>
+                  <td className="px-3 py-2 text-gray-500 hidden sm:table-cell">{exp.desc}</td>
+                  <td className="px-3 py-2 text-gray-600 font-mono hidden md:table-cell">{exp.config}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
-    </div>
-  );
-}
 
-function ReadmeSection() {
-  const readmeFile = codeFiles.find(f => f.name === 'README.md');
+      {/* Metrics */}
+      <div className="rounded-xl border border-gray-800/50 overflow-hidden">
+        <div className="p-3 bg-gray-900/50 border-b border-gray-800/50">
+          <h3 className="text-sm font-bold text-white">Metrics Tracked</h3>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-px bg-gray-800/30">
+          {metrics.map(m => (
+            <div key={m.name} className="flex items-center justify-between p-3 bg-gray-900/50">
+              <div>
+                <p className="text-xs font-medium text-gray-300">{m.name}</p>
+                <p className="text-[10px] text-gray-600">{m.desc}</p>
+              </div>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                pending
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-  return (
-    <div className="space-y-6">
-      <div className="text-center space-y-4">
-        <h2 className="text-3xl font-bold text-white">README</h2>
-        <p className="text-gray-400 max-w-2xl mx-auto">
-          Everything you need to get started — install, configure, run.
+      {/* Status note */}
+      <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
+        <div className="flex items-start gap-3">
+          <span className="text-lg">⚠️</span>
+          <div>
+            <h4 className="text-sm font-bold text-amber-400">Results Pending</h4>
+            <p className="text-xs text-gray-400 mt-1">
+              The experiment infrastructure is complete. Results will be populated when experiments are executed
+              with actual documents and API access. Per the project's core rules, no results are fabricated.
+              The framework records configuration, metrics, latency, and per-question results for full reproducibility.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Ablation purpose */}
+      <div className="p-4 rounded-xl bg-gray-900/50 border border-gray-800/50">
+        <h3 className="text-sm font-bold text-white mb-2">Ablation Study Purpose</h3>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          Ablation studies answer: <em>"Which architectural components materially improve reliability?"</em>
+          By systematically removing one component at a time from the full pipeline, we measure each component's
+          individual contribution. This prevents adding technology merely for appearance and ensures every
+          component earns its place through measured improvement.
         </p>
       </div>
+    </div>
+  );
+}
 
-      {/* Quick start steps */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StepCard step={1} title="Install" command="pip install -r requirements.txt" />
-        <StepCard step={2} title="Configure" command="cp .env.example .env" />
-        <StepCard step={3} title="Add PDFs" command="cp *.pdf documents/" />
-        <StepCard step={4} title="Ingest" command="python ingest.py" />
-        <StepCard step={5} title="Query" command="python query.py" />
-        <StepCard step={6} title="Ask!" command='❓ What is...' highlight />
+/* ═══════════════════════════════════════════════════════════
+   DOCUMENTATION SECTION
+   ═══════════════════════════════════════════════════════════ */
+function DocsSection() {
+  const [activeDoc, setActiveDoc] = useState(0);
+  const doc = documentation[activeDoc];
+
+  const categories = useMemo(() => [...new Set(documentation.map(d => d.category))], []);
+
+  return (
+    <div className="space-y-5">
+      <div className="text-center space-y-3">
+        <h2 className="text-2xl font-bold text-white">Documentation</h2>
+        <p className="text-sm text-gray-400">Architecture, decisions, security, and reproducibility guides</p>
       </div>
 
-      {/* Full README */}
-      <div className="pt-4">
-        <h3 className="text-xl font-bold text-white mb-4">Full README.md</h3>
-        {readmeFile && (
-          <CodeBlock code={readmeFile.code} language="markdown" filename="README.md" />
-        )}
+      {/* Doc tabs */}
+      <div className="flex flex-wrap gap-1.5">
+        {documentation.map((d, idx) => (
+          <button key={d.path} onClick={() => setActiveDoc(idx)}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              activeDoc === idx
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                : 'bg-gray-800/30 text-gray-500 border border-gray-800/50 hover:text-gray-300'
+            }`}>
+            <span className="mr-1">{d.icon}</span>{d.title}
+          </button>
+        ))}
+      </div>
+
+      {/* Doc content */}
+      {doc && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900/50 border border-gray-800/50">
+            <span className="text-xl">{doc.icon}</span>
+            <div>
+              <p className="text-sm font-bold text-white">{doc.title}</p>
+              <p className="text-xs font-mono text-gray-500">{doc.path}</p>
+            </div>
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-500">{doc.category}</span>
+          </div>
+          <div className="rounded-xl border border-gray-800/50 overflow-hidden">
+            <div className="max-h-[600px] overflow-y-auto p-5 bg-gray-900/30">
+              <MarkdownRenderer content={doc.content} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   METRICS SECTION
+   ═══════════════════════════════════════════════════════════ */
+function MetricsSection() {
+  const failureCategories = [
+    { name: 'Retrieval Failure', desc: 'Correct evidence exists but was not retrieved', icon: '🔍' },
+    { name: 'Chunking Failure', desc: 'Information split in a way that makes it unretrievable', icon: '✂️' },
+    { name: 'Ranking Failure', desc: 'Relevant chunks retrieved but ranked too low', icon: '📉' },
+    { name: 'Generation Failure', desc: 'Evidence correct but LLM produced wrong answer', icon: '🤖' },
+    { name: 'Citation Failure', desc: 'Citations do not point to actual evidence', icon: '📎' },
+    { name: 'Hallucination', desc: 'Answer contains information not in evidence', icon: '💭' },
+    { name: 'Abstention Failure', desc: 'Should have refused but answered anyway', icon: '⚠️' },
+    { name: 'Parsing Failure', desc: 'PDF text extraction produced incorrect text', icon: '📄' },
+    { name: 'Contradictory Source', desc: 'Different sources contain contradictory info', icon: '⚡' },
+    { name: 'Latency Failure', desc: 'System exceeds acceptable response time', icon: '⏱️' },
+    { name: 'Embedding Failure', desc: 'Query and relevant text have low similarity', icon: '🔢' },
+    { name: 'Context Window', desc: 'Too much context overwhelms the LLM', icon: '📏' },
+    { name: 'OCR Failure', desc: 'Scanned document text not recognized', icon: '👁️' },
+    { name: 'Table Understanding', desc: 'Tabular data not correctly interpreted', icon: '📊' },
+  ];
+
+  const supportLevels = [
+    { level: 'SUPPORTED', color: 'emerald', desc: 'Answer directly and clearly supported by context' },
+    { level: 'PARTIALLY_SUPPORTED', color: 'cyan', desc: 'Answer partially supported but requires inference' },
+    { level: 'UNSUPPORTED', color: 'red', desc: 'Answer goes beyond what context provides' },
+    { level: 'INSUFFICIENT_EVIDENCE', color: 'gray', desc: 'Not enough context for reliable answer → ABSTAIN' },
+  ];
+
+  return (
+    <div className="space-y-8">
+      <div className="text-center space-y-3">
+        <h2 className="text-2xl font-bold text-white">Evaluation & Failure Analysis</h2>
+        <p className="text-sm text-gray-400">Metrics, failure taxonomy, and support-level classification</p>
+      </div>
+
+      {/* Support levels */}
+      <div className="rounded-xl border border-gray-800/50 overflow-hidden">
+        <div className="p-3 bg-gray-900/50 border-b border-gray-800/50">
+          <h3 className="text-sm font-bold text-white">Answer Support Classification</h3>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-px bg-gray-800/30">
+          {supportLevels.map(s => (
+            <div key={s.level} className="flex items-center gap-3 p-3 bg-gray-900/50">
+              <div className={`w-2 h-8 rounded-full ${
+                s.color === 'emerald' ? 'bg-emerald-400' :
+                s.color === 'cyan' ? 'bg-cyan-400' :
+                s.color === 'red' ? 'bg-red-400' : 'bg-gray-500'
+              }`}></div>
+              <div>
+                <p className={`text-xs font-bold font-mono ${
+                  s.color === 'emerald' ? 'text-emerald-400' :
+                  s.color === 'cyan' ? 'text-cyan-400' :
+                  s.color === 'red' ? 'text-red-400' : 'text-gray-400'
+                }`}>{s.level}</p>
+                <p className="text-[10px] text-gray-500">{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Failure taxonomy */}
+      <div className="rounded-xl border border-gray-800/50 overflow-hidden">
+        <div className="p-3 bg-gray-900/50 border-b border-gray-800/50">
+          <h3 className="text-sm font-bold text-white">Failure Taxonomy (14 Categories)</h3>
+          <p className="text-[10px] text-gray-500 mt-0.5">Every failure is categorized, preserved, and analyzed</p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-px bg-gray-800/30">
+          {failureCategories.map(f => (
+            <div key={f.name} className="flex items-start gap-2 p-3 bg-gray-900/50">
+              <span className="text-sm shrink-0">{f.icon}</span>
+              <div>
+                <p className="text-xs font-medium text-gray-300">{f.name}</p>
+                <p className="text-[10px] text-gray-500">{f.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Failure analysis pipeline */}
+      <div className="p-4 rounded-xl bg-gray-900/50 border border-gray-800/50">
+        <h3 className="text-sm font-bold text-white mb-3">Failure Analysis Pipeline</h3>
+        <div className="space-y-2">
+          {[
+            'Record the question and expected answer',
+            'Record all retrieved evidence with scores',
+            'Record the generated answer',
+            'Categorize failure type from taxonomy',
+            'Identify probable root cause',
+            'Propose specific mitigation',
+            'Store in structured JSON for analysis',
+          ].map((step, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center text-[10px] text-gray-400 shrink-0">{i + 1}</span>
+              <span className="text-gray-400">{step}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Question types */}
+      <div className="p-4 rounded-xl bg-gray-900/50 border border-gray-800/50">
+        <h3 className="text-sm font-bold text-white mb-3">Benchmark Question Types</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {[
+            'Direct Lookup', 'Multi-hop', 'Numerical', 'Definition',
+            'Comparison', 'Summarization', 'Cross-section', 'Cross-document',
+            'Ambiguous', 'Unanswerable', 'Adversarial', 'Table-based',
+          ].map(type => (
+            <div key={type} className="px-2 py-1.5 rounded-md bg-gray-800/30 border border-gray-800/50 text-xs text-gray-400 text-center">
+              {type}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function StepCard({ step, title, command, highlight }: {
-  step: number; title: string; command: string; highlight?: boolean;
-}) {
+/* ═══════════════════════════════════════════════════════════
+   SHARED COMPONENTS
+   ═══════════════════════════════════════════════════════════ */
+function CodeBlock({ code, language, filename }: { code: string; language: string; filename: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+
   return (
-    <div className={`p-4 rounded-xl border transition-all ${
-      highlight
-        ? 'bg-emerald-500/5 border-emerald-500/30'
-        : 'bg-gray-900/50 border-gray-800/50 hover:border-gray-700/50'
-    }`}>
-      <div className="flex items-center gap-3 mb-2">
-        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-          highlight ? 'bg-emerald-500 text-gray-900' : 'bg-gray-800 text-gray-400'
-        }`}>
-          {step}
-        </span>
-        <span className="font-semibold text-white text-sm">{title}</span>
+    <div className="rounded-xl overflow-hidden border border-gray-700/50 shadow-xl">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800 border-b border-gray-700/50">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500/70"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/70"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-green-500/70"></div>
+          </div>
+          <span className="text-[10px] text-gray-400 font-mono truncate max-w-[200px]">{filename}</span>
+        </div>
+        <button onClick={handleCopy}
+          className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-all">
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
       </div>
-      <code className={`text-xs px-2 py-1 rounded font-mono ${
-        highlight ? 'bg-emerald-500/10 text-emerald-300' : 'bg-gray-800 text-gray-400'
-      }`}>
-        $ {command}
-      </code>
+      <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+        <SyntaxHighlighter language={language === 'json' ? 'json' : language === 'yaml' ? 'yaml' : language === 'dockerfile' ? 'docker' : 'python'}
+          style={oneDark}
+          customStyle={{ margin: 0, padding: '1rem', fontSize: '0.7rem', lineHeight: '1.5', background: '#1a1a2e' }}
+          wrapLines={true}>
+          {code}
+        </SyntaxHighlighter>
+      </div>
     </div>
   );
+}
+
+function MarkdownRenderer({ content }: { content: string }) {
+  // Simple markdown renderer for documentation content
+  const lines = content.split('\n');
+  const elements: JSX.Element[] = [];
+  let inCodeBlock = false;
+  let codeContent = '';
+  let codeLang = '';
+
+  lines.forEach((line, i) => {
+    if (line.startsWith('```')) {
+      if (inCodeBlock) {
+        elements.push(
+          <pre key={`code-${i}`} className="my-2 p-3 rounded-lg bg-gray-800/50 text-xs font-mono text-gray-300 overflow-x-auto">
+            <code>{codeContent.trim()}</code>
+          </pre>
+        );
+        codeContent = '';
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+        codeLang = line.slice(3).trim();
+      }
+      return;
+    }
+
+    if (inCodeBlock) {
+      codeContent += line + '\n';
+      return;
+    }
+
+    if (line.startsWith('# ')) {
+      elements.push(<h1 key={i} className="text-xl font-bold text-white mt-4 mb-2">{line.slice(2)}</h1>);
+    } else if (line.startsWith('## ')) {
+      elements.push(<h2 key={i} className="text-lg font-bold text-white mt-4 mb-2">{line.slice(3)}</h2>);
+    } else if (line.startsWith('### ')) {
+      elements.push(<h3 key={i} className="text-sm font-bold text-gray-200 mt-3 mb-1.5">{line.slice(4)}</h3>);
+    } else if (line.startsWith('#### ')) {
+      elements.push(<h4 key={i} className="text-xs font-bold text-gray-300 mt-2 mb-1">{line.slice(5)}</h4>);
+    } else if (line.startsWith('- [x] ') || line.startsWith('- [ ] ')) {
+      const checked = line.startsWith('- [x]');
+      elements.push(
+        <div key={i} className="flex items-center gap-2 text-xs text-gray-400 py-0.5">
+          <span className={checked ? 'text-emerald-400' : 'text-gray-600'}>{checked ? '✓' : '○'}</span>
+          <span className={checked ? 'text-gray-300' : ''}>{line.slice(6)}</span>
+        </div>
+      );
+    } else if (line.startsWith('- ')) {
+      elements.push(
+        <div key={i} className="flex items-start gap-2 text-xs text-gray-400 py-0.5">
+          <span className="text-gray-600 mt-0.5">•</span>{line.slice(2)}
+        </div>
+      );
+    } else if (line.startsWith('| ') && line.includes('|')) {
+      // Table row
+      const cells = line.split('|').filter(c => c.trim()).map(c => c.trim());
+      if (cells.every(c => c.match(/^[-:]+$/))) return; // separator row
+      elements.push(
+        <div key={i} className="flex gap-3 text-xs py-0.5 border-b border-gray-800/30">
+          {cells.map((cell, j) => (
+            <span key={j} className={`${j === 0 ? 'text-gray-300 font-medium min-w-[100px]' : 'text-gray-500'}`}>{cell}</span>
+          ))}
+        </div>
+      );
+    } else if (line.startsWith('> ')) {
+      elements.push(
+        <div key={i} className="pl-3 border-l-2 border-emerald-500/30 text-xs text-gray-400 italic my-1">
+          {line.slice(2)}
+        </div>
+      );
+    } else if (line.trim() === '') {
+      elements.push(<div key={i} className="h-2"></div>);
+    } else if (line.startsWith('---')) {
+      elements.push(<hr key={i} className="border-gray-800/50 my-3" />);
+    } else {
+      // Regular paragraph - handle inline formatting
+      const formatted = line
+        .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-200">$1</strong>')
+        .replace(/`(.+?)`/g, '<code class="px-1 py-0.5 rounded bg-gray-800 text-emerald-400/80 text-[11px]">$1</code>')
+        .replace(/\*(.+?)\*/g, '<em class="text-gray-300">$1</em>');
+      elements.push(<p key={i} className="text-xs text-gray-400 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatted }} />);
+    }
+  });
+
+  return <div className="space-y-0">{elements}</div>;
 }
