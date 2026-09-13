@@ -14,103 +14,71 @@ export const documentation: DocFile[] = [
     category: "Audit",
     content: `# Project Audit — RAG Pipeline
 
-## Current State (Pre-Transformation)
+## Current State
 
 The initial repository contained a basic two-stage RAG pipeline:
-- **ingest.py**: Load PDFs → chunk → embed → store in Chroma
-- **query.py**: Retrieve → prompt → generate → cite
-- **config.py**: Basic configuration constants
-- Simple CLI interface
+- ingest.py: Load PDFs → chunk → embed → store in Chroma
+- query.py: Retrieve → prompt → generate → cite
+- config.py: Basic configuration constants
 
-### What Worked
-- Basic PDF ingestion via PyPDFDirectoryLoader
-- Local embeddings via sentence-transformers
-- Persistent ChromaDB storage
-- Simple citation display (filename + page)
-- Clean separation of ingest/query stages
+## Major Weaknesses
 
-### Major Weaknesses Identified
+### Critical
+- **No evaluation framework** — cannot measure retrieval or generation quality
+- **No benchmark dataset** — no ground truth for comparison
+- **Zero tests** — no unit, integration, or failure tests
+- **Only dense retrieval** — no BM25, no hybrid, no reranking
+- **No abstention** — system always attempts an answer, even when evidence is insufficient
 
-#### 1. Retrieval Quality (Critical)
-- **Only dense retrieval**: No BM25/lexical retrieval means poor performance on exact-match queries (names, numbers, technical terms)
-- **No reranking**: Raw similarity scores sent directly to LLM
-- **No hybrid fusion**: Missing complementary retrieval signals
-- **Fixed top-K=4**: No experimentation with optimal retrieval depth
+### High
+- **Single chunking strategy** — cannot determine optimal approach experimentally
+- **No citation validation** — citations not verified against source
+- **No hallucination detection** — unsupported answers presented confidently
+- **No security hardening** — no input validation, no prompt injection protection
+- **No Docker/CI** — no reproducible environment or automated testing
 
-#### 2. Chunking (High)
-- **Single strategy**: Only RecursiveCharacterTextSplitter, no comparison
-- **No structure awareness**: Ignores document headings, sections, tables
-- **No metadata enrichment**: Section names, hierarchy not preserved
-- **No experimentation framework**: Cannot determine optimal strategy
-
-#### 3. Evaluation (Critical)
-- **No evaluation framework**: No way to measure retrieval or generation quality
-- **No benchmark dataset**: No ground truth for comparison
-- **No metrics**: Cannot quantify improvements
-- **No ablation studies**: Cannot determine which components matter
-
-#### 4. Reliability (High)
-- **No abstention mechanism**: LLM always attempts an answer
-- **No hallucination detection**: Unsupported answers presented confidently
-- **No citation validation**: Citations not verified against source
-- **No support-level classification**: No distinction between supported/unsupported
-
-#### 5. Security (Medium)
-- **No input validation**: File size, type, content not validated
-- **No prompt injection protection**: Retrieved text treated as trusted
-- **No resource limits**: No protection against oversized documents
-- **API key in .env but no validation**: Silent failure on missing key
-
-#### 6. Scalability (Medium)
-- **No batching**: Embeddings processed one at a time
-- **No caching**: Re-embedding on every ingest run
-- **No async processing**: Sequential document processing
-- **No indexing strategy for scale**: Works for 10 docs, unclear at 10,000
-
-#### 7. Testing (Critical)
-- **Zero tests**: No unit tests, no integration tests
-- **No CI/CD**: No automated validation
-- **No Docker**: No reproducible environment
-
-#### 8. Documentation (Medium)
-- README covers basic usage but not architecture
-- No failure analysis
-- No experimental methodology
-- No security documentation
-- No reproducibility guide
+### Medium
+- **No adaptive retrieval** — all queries use identical strategy
+- **No contradiction handling** — conflicting sources silently resolved
+- **No experiment tracking** — cannot reproduce or compare configurations
+- **No failure analysis** — failures not categorized or learned from
 
 ## Recommended Architecture
 
 Transform into a modular, component-based system with:
-1. Clean interfaces between stages
-2. Configurable retrieval pipeline (dense + BM25 + hybrid + rerank)
-3. Comprehensive evaluation framework
-4. Abstention and hallucination reduction
-5. Citation validation
-6. Security hardening
-7. Full test coverage
-8. Experiment tracking
+1. Clean interfaces between stages (Pydantic models)
+2. Multiple retrieval strategies (dense + BM25 + hybrid + rerank)
+3. Adaptive retrieval based on query analysis
+4. Evidence sufficiency assessment before generation
+5. Citation validation against retrieved evidence
+6. Comprehensive evaluation framework
+7. Experiment runner with hypothesis/method/result structure
+8. Full test suite (unit + integration + failure)
+9. Security hardening (input validation, injection detection)
+10. Docker + CI/CD for reproducibility
 
 ## Implementation Roadmap
 
-| Phase | Component | Priority | Effort |
+| Phase | Component | Priority | Status |
 |-------|-----------|----------|--------|
-| 1 | Core models & config | P0 | Low |
-| 2 | Robust PDF parser | P0 | Medium |
-| 3 | Multiple chunking strategies | P0 | Medium |
-| 4 | BM25 index | P0 | Low |
-| 5 | Hybrid retrieval + RRF | P0 | Medium |
-| 6 | Cross-encoder reranking | P1 | Low |
-| 7 | Evaluation framework | P0 | High |
-| 8 | Benchmark dataset | P0 | High |
-| 9 | Abstention mechanism | P1 | Medium |
-| 10 | Citation validation | P1 | Medium |
-| 11 | API layer | P1 | Medium |
-| 12 | Testing suite | P0 | Medium |
-| 13 | Security hardening | P1 | Low |
-| 14 | Experiment runner | P1 | Medium |
-| 15 | Docker + CI | P2 | Low |
-| 16 | Documentation | P1 | Medium |
+| 1 | Core models & config | P0 | ✅ Implemented |
+| 2 | Robust PDF parser | P0 | ✅ Implemented |
+| 3 | Multiple chunking strategies | P0 | ✅ Implemented |
+| 4 | BM25 index | P0 | ✅ Implemented |
+| 5 | Hybrid retrieval + RRF | P0 | ✅ Implemented |
+| 6 | Cross-encoder reranking | P1 | ✅ Implemented |
+| 7 | Query analysis + adaptive retrieval | P1 | ✅ Implemented |
+| 8 | Evidence sufficiency + abstention | P1 | ✅ Implemented |
+| 9 | Contradiction detection | P1 | ✅ Implemented |
+| 10 | Citation validation | P1 | ✅ Implemented |
+| 11 | Evaluation framework | P0 | ✅ Implemented |
+| 12 | Benchmark dataset | P0 | ✅ Template created |
+| 13 | Experiment runner | P1 | ✅ Implemented |
+| 14 | Testing suite | P0 | ✅ Implemented |
+| 15 | Security hardening | P1 | ✅ Implemented |
+| 16 | API layer | P1 | ✅ Implemented |
+| 17 | Docker + CI | P2 | ✅ Implemented |
+| 18 | Documentation | P1 | ✅ Implemented |
 `
   },
 
@@ -123,126 +91,132 @@ Transform into a modular, component-based system with:
 
 ## Overview
 
-The RAG Pipeline follows a modular, pipeline-based architecture where each component has a single responsibility and communicates through well-defined interfaces.
+The RAG Pipeline follows an adaptive, evidence-aware architecture. Unlike basic RAG systems that use a fixed retrieve-then-generate pipeline, this system dynamically adjusts its retrieval strategy based on query characteristics and assesses evidence sufficiency before generating answers.
+
+## Central Research Question
+
+> How can a RAG system dynamically balance retrieval quality, factual reliability, latency, and computational cost while recognizing when available evidence is insufficient to answer a question?
 
 ## Data Flow
 
 \`\`\`
-┌─────────────────────────────────────────────────────────────────┐
-│                        INGESTION PIPELINE                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  PDF Files ──→ Parser ──→ Structure Detector ──→ Chunker        │
-│                    │                              │              │
-│                    ▼                              ▼              │
-│              Metadata                      TextChunks             │
-│              Extraction                         │                │
-│                    │              ┌─────────────┼──────────┐    │
-│                    ▼              ▼             ▼          ▼    │
-│              DocumentMetadata  Embedder     BM25 Index  Store   │
-│                                   │             │          │    │
-│                                   ▼             ▼          ▼    │
-│                              VectorIndex   BM25Index   ChromaDB │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                         INGESTION PIPELINE                            │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  PDF Files → Parser → Structure Detector → Chunker (4 strategies)    │
+│                  ↓                          ↓                         │
+│            Metadata                   TextChunks                      │
+│            Extraction                      ↓                          │
+│                  ↓               ┌────────┼────────┐                 │
+│           DocumentMeta          ↓        ↓        ↓                  │
+│                              Embedder  BM25    Store                 │
+│                                ↓        ↓        ↓                  │
+│                           VectorIndex  BM25Idx  ChromaDB             │
+│                                                                       │
+└──────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────────────┐
-│                         QUERY PIPELINE                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Question                                                        │
-│     │                                                            │
-│     ├──→ Dense Retrieval (cosine similarity) ──┐                │
-│     │                                           │                │
-│     └──→ BM25 Retrieval (lexical matching) ────┤                │
-│                                                 │                │
-│                                                 ▼                │
-│                                    Reciprocal Rank Fusion        │
-│                                                 │                │
-│                                                 ▼                │
-│                                    Cross-Encoder Reranking       │
-│                                                 │                │
-│                                                 ▼                │
-│                                    Context Construction          │
-│                                                 │                │
-│                                                 ▼                │
-│                                    LLM Generation                │
-│                                    (with abstention)             │
-│                                                 │                │
-│                                                 ▼                │
-│                                    Citation Validation           │
-│                                                 │                │
-│                                                 ▼                │
-│                              ┌──────────────────┴──────────┐    │
-│                              ▼                              ▼    │
-│                         Answer + Citations        Evaluation     │
-│                                                   Logging        │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                    ADAPTIVE QUERY PIPELINE                             │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  Question                                                             │
+│     │                                                                 │
+│     ├──→ Query Analyzer (classify type)                               │
+│     │        │                                                        │
+│     │        ├── EXACT → lexical-heavy weights                        │
+│     │        ├── CONCEPTUAL → semantic-heavy weights                  │
+│     │        ├── MULTI_HOP → broader retrieval                        │
+│     │        └── UNKNOWN → balanced hybrid                            │
+│     │                                                                 │
+│     ├──→ Dense Retrieval (adjusted top-K) ──┐                        │
+│     │                                        │                        │
+│     └──→ BM25 Retrieval (adjusted top-K) ───┤                        │
+│                                              │                        │
+│                                              ↓                        │
+│                              Adaptive Weighted Fusion                 │
+│                                              │                        │
+│                                              ↓                        │
+│                              Cross-Encoder Reranking                  │
+│                                              │                        │
+│                                              ↓                        │
+│                          Evidence Sufficiency Assessment              │
+│                                     │                                 │
+│                    ┌────────────────┼────────────────┐               │
+│                    ↓                ↓                ↓               │
+│              Sufficient      Retrieve More       Abstain             │
+│                    │                                               │
+│                    ↓                                               │
+│              LLM Generation                                        │
+│              (with grounding)                                      │
+│                    │                                               │
+│                    ↓                                               │
+│              Citation Validation                                   │
+│                    │                                               │
+│                    ↓                                               │
+│              Contradiction Check                                   │
+│                    │                                               │
+│                    ↓                                               │
+│         ┌──────────┴──────────┐                                   │
+│         ↓                     ↓                                    │
+│    Answer + Citations    Evaluation + Logging                      │
+│                                                                       │
+└──────────────────────────────────────────────────────────────────────┘
 \`\`\`
 
 ## Component Responsibilities
 
-### 1. Document Parsing (src/parsing/)
-- Extract text from PDF files
-- Detect and remove headers/footers
-- Extract metadata (title, author, page count)
-- Handle malformed files gracefully
-- Compute content hashes for deduplication
+### 1. Query Analyzer (src/adaptive/)
+- Classifies queries into types (EXACT, CONCEPTUAL, MULTI_HOP, etc.)
+- Maps query types to optimal retrieval weights
+- Adjusts candidate count based on query complexity
+- Rule-based (fast, deterministic, debuggable)
 
-### 2. Chunking (src/chunking/)
-- Split documents into retrievable units
-- Four strategies: fixed, sentence, recursive, structure-aware
-- Preserve metadata through chunking
-- Configurable size, overlap, and constraints
+### 2. Adaptive Retriever (src/adaptive/)
+- Uses query analysis to adjust dense/BM25 weights
+- Adjusts candidate counts per query type
+- Records all adaptive decisions for experimental analysis
+- Falls back to fixed weights when adaptive is disabled
 
-### 3. Embeddings (src/embeddings/)
-- Convert text chunks to vector representations
-- Support local (sentence-transformers) and API (OpenAI) providers
-- Batch processing for efficiency
-- Model caching to avoid reloads
+### 3. Evidence Sufficiency (src/evidence/)
+- Assesses retrieval score quality
+- Measures evidence agreement between sources
+- Evaluates evidence coverage of the question
+- Detects contradictions between sources
+- Recommends: answer, retrieve_more, or abstain
 
-### 4. Indexing (src/indexing/)
-- **VectorIndex**: ChromaDB for dense retrieval
-- **BM25Index**: rank_bm25 for lexical retrieval
-- Both persist to disk for fast reload
-- Support incremental updates
+### 4. Contradiction Handler (src/evidence/)
+- Detects numerical contradictions across documents
+- Detects temporal contradictions
+- Formats contradiction warnings for the user
+- Cites both conflicting sources
 
-### 5. Retrieval (src/retrieval/)
+### 5. Citation Validator (src/citations/)
+- Validates each citation against retrieved chunks
+- Checks structural validity (chunk exists)
+- Checks content validity (cited text appears in chunk)
+- Removes invalid citations before returning to user
+
+### 6. Retrieval (src/retrieval/)
 - Dense retrieval via vector similarity
 - BM25 retrieval via lexical matching
-- Reciprocal Rank Fusion for combining signals
+- RRF fusion for combining signals
 - Cross-encoder reranking for precision
-- Full latency tracking per stage
 
-### 6. Generation (src/generation/)
-- LLM-based answer generation
-- Strict grounding instructions
-- Citation extraction and validation
+### 7. Generation (src/generation/)
+- LLM-based answer generation with strict grounding
+- Citation extraction and formatting
 - Support-level classification
 - Abstention when evidence is insufficient
 
-### 7. Evaluation (src/evaluation/)
-- Per-question metric computation
-- Aggregate metric computation
-- Experiment tracking with config snapshots
-- Failure categorization
-- Results persistence
-
-### 8. API (src/api/)
-- FastAPI server
-- Document upload/management
-- Query endpoint with structured response
-- Health and metrics endpoints
-
 ## Design Principles
 
-1. **Modularity**: Each component can be replaced independently
-2. **Configurability**: All parameters in config.py, overridable per experiment
-3. **Traceability**: Every chunk traces back to source document + page
-4. **Measurability**: Every stage records latency and metrics
-5. **Fail-safe**: Graceful degradation on errors, never crashes silently
-6. **Reproducibility**: Config snapshots with every experiment result
+1. **Modularity**: Each component replaceable independently
+2. **Measurability**: Every stage records latency and metrics
+3. **Traceability**: Every chunk traces to source document + page
+4. **Adaptability**: System adjusts strategy per query
+5. **Reliability**: Evidence checked before answer generated
+6. **Reproducibility**: Config snapshots with every experiment
 `
   },
 
@@ -251,189 +225,111 @@ The RAG Pipeline follows a modular, pipeline-based architecture where each compo
     path: "docs/RESEARCH_REPORT.md",
     icon: "📊",
     category: "Research",
-    content: `# Research Report: Retrieval Strategy Impact on RAG Reliability
+    content: `# Research Report: Evidence-Aware Adaptive RAG
 
-## Abstract
+## 1. Abstract
 
-This project investigates how retrieval strategy, chunking approach, reranking, and abstention mechanisms affect factual reliability, citation accuracy, latency, and cost in document-grounded question answering systems. Rather than claiming state-of-the-art results, we build infrastructure to measure these effects systematically and reproducibly.
+This project investigates how retrieval strategy, chunking, reranking, adaptive weighting, and abstention mechanisms affect factual reliability, citation accuracy, latency, and cost in document-grounded question answering. We build infrastructure to measure these effects systematically. **Results are pending** — the framework is complete but experiments require document ingestion and API access.
 
-## 1. Problem
+## 2. Problem
 
-Large language models hallucinate when asked about specific documents. RAG (Retrieval-Augmented Generation) addresses this by retrieving relevant context before generation. However, the quality of RAG answers depends critically on:
-- What retrieval strategy is used
-- How documents are chunked
-- Whether reranking improves precision
-- Whether the system can refuse to answer when evidence is insufficient
+LLMs hallucinate when asked about specific documents. RAG addresses this by retrieving context before generation. However, RAG quality depends on retrieval strategy, chunking, and whether the system can refuse to answer. These factors are rarely studied together.
 
-These factors are rarely studied together in a controlled experimental framework.
+## 3. Research Question
 
-## 2. Motivation
+> How can a RAG system dynamically balance retrieval quality, factual reliability, latency, and computational cost while recognizing when available evidence is insufficient?
 
-Most RAG implementations optimize for a single metric (answer quality) without understanding the contribution of each component. This makes it impossible to:
-- Know which components actually help
-- Optimize for cost vs. quality tradeoffs
-- Understand failure modes
-- Make evidence-based architectural decisions
+## 4. Hypotheses
 
-## 3. Research Questions
+- H1: Hybrid retrieval (dense + BM25) outperforms either alone
+- H2: Cross-encoder reranking improves citation accuracy
+- H3: Adaptive weighting (query-type-aware) improves retrieval over fixed weights
+- H4: Evidence sufficiency assessment reduces hallucination
+- H5: Structure-aware chunking produces better retrieval than fixed-size
 
-**Primary**: How do retrieval strategy, chunking, reranking, and abstention affect factual reliability and citation accuracy in document-grounded QA?
+## 5. System Architecture
 
-**Sub-questions**:
-- RQ1: Does hybrid retrieval (dense + BM25) outperform dense-only retrieval?
-- RQ2: Does cross-encoder reranking improve citation accuracy?
-- RQ3: Which chunking strategy produces the best retrieval quality?
-- RQ4: Can abstention mechanisms reduce hallucination without excessive false refusals?
-- RQ5: What is the latency/cost tradeoff of each pipeline component?
+See docs/ARCHITECTURE.md. Key innovations:
+- Query analysis → adaptive retrieval weights
+- Evidence sufficiency check before generation
+- Contradiction detection across sources
+- Citation validation against retrieved evidence
 
-## 4. System Architecture
+## 6. Retrieval Methods
 
-See docs/ARCHITECTURE.md for full details.
+- **Dense**: Cosine similarity via sentence-transformers
+- **BM25**: Lexical matching via rank_bm25
+- **Hybrid**: Weighted fusion with query-type-adaptive weights
+- **RRF**: Reciprocal Rank Fusion as alternative
+- **Reranking**: Cross-encoder (ms-marco-MiniLM)
 
-Key components under investigation:
-- **Retrieval**: Dense (cosine), BM25 (lexical), Hybrid (RRF fusion), Reranked (cross-encoder)
-- **Chunking**: Fixed-size, Sentence-based, Recursive, Structure-aware
-- **Generation**: GPT-4o-mini with strict grounding + abstention
-- **Evaluation**: Retrieval metrics (Recall@K, MRR, nDCG) + Generation metrics (correctness, groundedness, citation accuracy)
+## 7. Dataset
 
-## 5. Experimental Methodology
+Benchmark dataset with 15 question categories:
+direct_lookup, multi_hop, numerical, definition, comparison, summarization, cross_section, cross_document, ambiguous, unanswerable, adversarial, table_based, contradictory, temporal, long_context
 
-### Dataset
-- Benchmark dataset with 100-300 questions across 12 categories
-- Categories: direct lookup, multi-hop, numerical, definition, comparison, summarization, cross-section, cross-document, ambiguous, unanswerable, adversarial, table-based
-- Each question has verified source document, page, and relevant chunk IDs
-- Unanswerable questions test abstention capability
+Target: 100-300 verified questions. Template provided.
 
-### Metrics
-**Retrieval:**
-- Recall@1, Recall@3, Recall@5, Recall@10
-- MRR (Mean Reciprocal Rank)
-- nDCG@5
-- Source retrieval accuracy
-- Passage retrieval accuracy
+## 8. Experimental Methodology
 
-**Generation:**
-- Factual correctness (heuristic + LLM judge)
-- Groundedness (evidence support level)
-- Citation accuracy (validated vs. total citations)
-- Hallucination rate
-- Abstention accuracy
+19 experiments (EXP-01 through EXP-19) plus ablation studies.
+Each experiment records: hypothesis, method, config snapshot, metrics, latency, errors.
 
-**System:**
-- End-to-end latency (p50, p95)
-- Per-stage latency breakdown
-- Token usage and estimated cost
+## 9. Metrics
 
-### Experiments
-Each experiment runs the full benchmark dataset with a specific configuration:
+**Retrieval**: Recall@K, MRR, nDCG, source accuracy, passage accuracy
+**Generation**: Factual correctness, groundedness, citation accuracy, hallucination rate
+**System**: Latency (p50, p95), token usage, cost
+**Abstention**: Correct refusal rate, false answering rate
 
-| ID | Configuration | Purpose |
-|----|--------------|---------|
-| A | Dense only | Baseline semantic retrieval |
-| B | BM25 only | Baseline lexical retrieval |
-| C | Hybrid (RRF) | Combined retrieval |
-| D | Hybrid + Rerank | Full pipeline |
-| E | Fixed chunking | Chunking comparison |
-| F | Sentence chunking | Chunking comparison |
-| G | Recursive chunking | Chunking comparison |
-| H | Structure chunking | Chunking comparison |
-| I | Top-K=3 | Retrieval depth sensitivity |
-| J | Top-K=5 | Default |
-| K | Top-K=10 | Retrieval depth sensitivity |
-| L | No reranking (ablation) | Component importance |
-| M | No BM25 (ablation) | Component importance |
-| N | No dense (ablation) | Component importance |
+## 10. Results
 
-### Reproducibility
-Every experiment records:
-- Full configuration snapshot
-- Dataset version
-- Timestamp
-- Per-question results
-- Aggregate metrics
-- Errors and exceptions
+> **STATUS: RESULTS PENDING**
 
-## 6. Results
+The experiment infrastructure is complete. Results will be populated when experiments are executed with actual documents and API access. Per the project's core rules, no results are fabricated.
 
-> **STATUS: PENDING** — Experiments require document ingestion and API access to run.
-> The infrastructure is complete. Results will be populated when experiments are executed.
-
-The experiment runner (\`experiments/run_experiments.py\`) will produce:
-- Per-experiment JSON results in \`experiments/results/\`
-- Comparison table in \`experiments/results/COMPARISON.md\`
-- Failure analysis in structured format
-
-## 7. Ablation Studies
-
-Ablation studies isolate the contribution of each component:
+## 11. Ablation Studies
 
 | Comparison | Tests |
 |-----------|-------|
-| D vs L | Does reranking improve quality? |
-| C vs M | Does BM25 add value beyond dense? |
-| C vs N | Does dense add value beyond BM25? |
-| E vs F vs G vs H | Which chunking strategy is best? |
-| I vs J vs K | What is the optimal top-K? |
+| EXP-03 vs EXP-ABL_no_bm25 | Does BM25 add value? |
+| EXP-03 vs EXP-ABL_no_dense | Does dense add value? |
+| EXP-06 vs EXP-ABL_no_adaptive | Does adaptive weighting help? |
+| EXP-19 vs EXP-ABL_no_evidence_check | Does evidence checking reduce hallucination? |
 
-## 8. Failure Analysis
+## 12. Failure Analysis
 
-See docs/FAILURE_ANALYSIS.md for the complete failure taxonomy.
+See docs/FAILURE_ANALYSIS.md. 15 failure categories defined.
+Every failed question is preserved with: question, evidence, answer, category, cause, mitigation.
 
-Expected failure categories:
-1. Retrieval failure (correct answer exists but wasn't retrieved)
-2. Ranking failure (correct chunk retrieved but ranked too low)
-3. Generation failure (evidence present but LLM produced wrong answer)
-4. Citation failure (answer correct but citations don't match evidence)
-5. Hallucination (answer not supported by any retrieved evidence)
-6. Abstention failure (should have refused but answered anyway)
+## 13. Security
 
-## 9. Security Considerations
+See docs/SECURITY.md. Protections: input validation, prompt injection detection, resource limits, secrets management, non-root Docker.
 
-See docs/SECURITY.md for full details.
+## 14. Limitations
 
-Key protections:
-- Input validation (file size, type, content)
-- Prompt injection detection in retrieved text
-- Resource limits (max pages, max chunk size)
-- API key management via environment variables
-- Non-root Docker execution
+1. Evaluation uses heuristics — proper evaluation requires LLM judge or human annotation
+2. Dataset is template — needs verified ground truth
+3. Only one embedding model tested by default
+4. Only GPT-4o-mini tested for generation
+5. PDF-only — no other document formats
+6. No OCR for scanned documents
+7. Contradiction detection is heuristic-based
 
-## 10. Performance Analysis
+## 15. Future Work
 
-Performance measurements (pending execution):
-- Ingestion: parsing + chunking + embedding + indexing
-- Query: retrieval + reranking + generation
-- Memory: vector store size, BM25 index size
-- Cost: API token usage per query
+1. LLM-as-judge evaluation
+2. Multi-format document support
+3. OCR integration
+4. Adaptive chunking (learn optimal size from data)
+5. Query expansion (HyDE, multi-query)
+6. Conversation memory
+7. Table extraction
+8. Graph-based retrieval for multi-hop
 
-## 11. Limitations
+## 16. Conclusion
 
-1. **Evaluation is heuristic**: Factual correctness uses support-level as proxy. True evaluation requires LLM judge or human annotation.
-2. **Dataset is template**: Benchmark questions need to be populated with verified ground truth against actual documents.
-3. **Single embedding model**: Only all-MiniLM-L6-v2 tested. Different models may change results.
-4. **Single LLM**: Only GPT-4o-mini tested. Different models have different hallucination profiles.
-5. **PDF-only**: No support for other document formats (DOCX, HTML, etc.)
-6. **No OCR**: Scanned PDFs are not handled.
-7. **Local evaluation**: No large-scale cloud deployment tested.
-
-## 12. Future Work
-
-1. **LLM-as-judge evaluation**: Use GPT-4o to evaluate factual correctness
-2. **Multi-format support**: Add DOCX, HTML, Markdown parsing
-3. **OCR integration**: Handle scanned PDFs via Tesseract
-4. **Streaming responses**: Server-sent events for real-time answers
-5. **Multi-tenancy**: Support multiple document collections
-6. **Adaptive chunking**: Learn optimal chunk size from data
-7. **Query expansion**: HyDE, multi-query retrieval
-8. **Conversation memory**: Multi-turn Q&A with context
-9. **Table extraction**: Specialized handling for tabular data
-10. **Graph-based retrieval**: Entity/relationship extraction for multi-hop
-
-## 13. Conclusion
-
-This project provides the infrastructure to systematically study RAG pipeline components and their impact on reliability. The key contribution is not any single technique but the experimental framework that enables evidence-based architectural decisions.
-
-The system is designed to answer: "Which components materially improve reliability, and at what cost?"
+This project provides infrastructure to systematically study RAG pipeline components. The key contribution is the experimental framework that enables evidence-based architectural decisions. The system is designed to answer: "Which components materially improve reliability, and at what cost?"
 `
   },
 
@@ -446,137 +342,79 @@ The system is designed to answer: "Which components materially improve reliabili
 
 ## Overview
 
-Every RAG system will fail. The question is not whether failures occur, but whether we can detect, categorize, and learn from them. This document defines a formal failure taxonomy and provides the infrastructure to analyze every failure.
+Every RAG system will fail. The question is whether we can detect, categorize, and learn from failures. This document defines a 15-category failure taxonomy.
 
 ## Failure Taxonomy
 
 ### 1. Retrieval Failure
-**Definition**: The correct evidence exists in the index but was not retrieved.
-
-**Sub-types**:
-- **Embedding failure**: Query and relevant text have low semantic similarity despite being related
-- **BM25 failure**: Query terms don't match document terms (synonym problem)
-- **Capacity failure**: top-K too small to include relevant chunks
-- **Index corruption**: Vector store or BM25 index is incomplete
-
-**Detection**: Recall@K metrics. If relevant chunk exists but isn't in top-K results.
-
-**Mitigation**: Increase top-K, add BM25 for lexical matching, improve embeddings.
+Correct evidence exists in the index but was not retrieved.
+**Detection**: Recall@K metrics. **Mitigation**: Increase top-K, add BM25.
 
 ### 2. Chunking Failure
-**Definition**: The relevant information was split across chunks in a way that makes it unretrievable.
+Relevant information split across chunks making it unretrievable.
+**Detection**: Compare chunking strategies. **Mitigation**: Increase overlap, use structure-aware.
 
-**Sub-types**:
-- **Split fact**: A key fact is divided between two chunks, neither containing the complete fact
-- **Context loss**: Chunk lacks surrounding context needed to understand it
-- **Size mismatch**: Chunk too small (loses context) or too large (too noisy)
+### 3. Embedding Failure
+Query and relevant text have low semantic similarity despite being related.
+**Detection**: Low dense retrieval scores for relevant content. **Mitigation**: Try different embedding model.
 
-**Detection**: Compare chunking strategies experimentally. Analyze failures where correct page was retrieved but wrong passage.
+### 4. Ranking Failure
+Relevant chunks retrieved but ranked below irrelevant ones.
+**Detection**: nDCG metrics. **Mitigation**: Add reranking, tune fusion weights.
 
-**Mitigation**: Increase overlap, use structure-aware chunking, experiment with sizes.
+### 5. Context Window Failure
+Too much context overwhelms the LLM, causing it to ignore relevant evidence.
+**Detection**: Correct retrieval but wrong answer. **Mitigation**: Reduce context size, better chunk selection.
 
-### 3. Ranking Failure
-**Definition**: Relevant chunks were retrieved but ranked below irrelevant ones.
+### 6. Generation Failure
+Evidence retrieved correctly but LLM produced incorrect answer.
+**Detection**: Compare answer to expected. **Mitigation**: Better prompt engineering, lower temperature.
 
-**Sub-types**:
-- **Score inversion**: Irrelevant chunk has higher similarity score than relevant one
-- **Diversity penalty**: MMR/RRF pushes relevant chunk below irrelevant diverse one
-- **Reranker error**: Cross-encoder assigns wrong relevance score
+### 7. Citation Failure
+Answer correct but citations don't point to actual evidence.
+**Detection**: Citation validation. **Mitigation**: Structured citation format, post-validation.
 
-**Detection**: nDCG metrics. Relevant chunks present in candidates but at low rank.
+### 8. Hallucination
+Answer contains information not in any retrieved evidence.
+**Detection**: Support level = UNSUPPORTED. **Mitigation**: Stronger grounding, abstention.
 
-**Mitigation**: Add reranking, tune fusion weights, adjust MMR diversity parameter.
+### 9. Parsing Failure
+PDF text extraction produced incorrect or incomplete text.
+**Detection**: Compare extracted text to visual inspection. **Mitigation**: Alternative parsers, OCR.
 
-### 4. Generation Failure
-**Definition**: Evidence was retrieved correctly but the LLM produced an incorrect answer.
+### 10. OCR Failure
+Scanned document text not recognized.
+**Detection**: Empty or garbled pages. **Mitigation**: Better OCR engine.
 
-**Sub-types**:
-- **Misreading**: LLM misinterprets the retrieved evidence
-- **Over-inference**: LLM draws conclusions not supported by evidence
-- **Contradiction handling**: LLM picks wrong answer when evidence is contradictory
-- **Instruction following**: LLM ignores grounding instructions
+### 11. Table Understanding Failure
+Tabular data not correctly interpreted.
+**Detection**: Numerical answers wrong for table-based questions. **Mitigation**: Table extraction.
 
-**Detection**: Compare generated answer to expected answer. Support level = UNSUPPORTED.
+### 12. Contradictory Source Failure
+Different documents contain contradictory information.
+**Detection**: Contradiction detection module. **Mitigation**: Flag contradictions, cite both sources.
 
-**Mitigation**: Better prompt engineering, lower temperature, stronger grounding instructions.
+### 13. Unanswerable Question Failure
+System should have refused but answered anyway.
+**Detection**: Unanswerable benchmark questions that receive answers. **Mitigation**: Evidence sufficiency check.
 
-### 5. Citation Failure
-**Definition**: Answer is correct but citations don't point to the actual evidence.
+### 14. Latency/Resource Failure
+System exceeds acceptable response time or resource limits.
+**Detection**: p95 latency monitoring. **Mitigation**: Caching, batching, smaller models.
 
-**Sub-types**:
-- **Wrong source**: Citation points to a chunk that doesn't contain the cited information
-- **Missing citation**: Answer is supported but no citation was generated
-- **Fabricated citation**: Citation references a chunk that doesn't exist
+### 15. Prompt Injection Failure
+Malicious content in documents or queries manipulates the system.
+**Detection**: Adversarial benchmark questions. **Mitigation**: Input sanitization, system prompt hardening.
 
-**Detection**: Validate each citation against its referenced chunk. Check if cited text appears in the chunk.
+## Retrieval vs Generation Failure Decomposition
 
-**Mitigation**: Structured citation format, post-generation validation, citation extraction from evidence.
+Critical distinction:
+- **Retrieval failure**: Correct evidence exists but wasn't retrieved
+- **Generation failure**: Evidence was retrieved but answer is wrong
+- **Citation failure**: Answer is correct but citations are wrong
+- **Evidence failure**: Evidence itself is conflicting or insufficient
 
-### 6. Hallucination
-**Definition**: Answer contains information not present in any retrieved evidence.
-
-**Sub-types**:
-- **Fabricated fact**: LLM invents a fact not in any document
-- **External knowledge**: LLM uses training data instead of retrieved context
-- **Confabulation**: LLM combines real facts in a way that creates false information
-
-**Detection**: Support level = UNSUPPORTED. Factual correctness check against expected answer.
-
-**Mitigation**: Stronger grounding instructions, abstention mechanism, citation validation.
-
-### 7. Abstention Failure
-**Definition**: System should have refused to answer but produced an answer anyway.
-
-**Sub-types**:
-- **False confidence**: System is confident but wrong
-- **Unanswerable question**: Question has no answer in documents but system answers
-- **Adversarial success**: Prompt injection causes system to bypass grounding
-
-**Detection**: Unanswerable questions in benchmark that receive answers. Adversarial questions that produce responses.
-
-**Mitigation**: Confidence thresholds, explicit abstention instructions, support-level classification.
-
-### 8. Parsing Failure
-**Definition**: PDF text extraction produced incorrect or incomplete text.
-
-**Sub-types**:
-- **Encoding errors**: Special characters garbled
-- **Layout errors**: Text extracted in wrong order (columns, sidebars)
-- **Missing content**: Some text not extracted at all
-- **Table destruction**: Tabular data becomes unreadable text
-
-**Detection**: Compare extracted text to visual inspection of PDF. Check for empty pages.
-
-**Mitigation**: Alternative PDF parsers, OCR for scanned documents, table detection.
-
-### 9. Contradictory Source Failure
-**Definition**: Different documents or sections contain contradictory information.
-
-**Detection**: Flag when retrieved chunks contain contradictory statements.
-
-**Mitigation**: Note contradictions in answer, cite both sources, let user decide.
-
-### 10. Latency/Resource Failure
-**Definition**: System exceeds acceptable latency or resource limits.
-
-**Detection**: p95 latency monitoring, memory usage tracking.
-
-**Mitigation**: Caching, batching, async processing, smaller models.
-
-## Failure Analysis Pipeline
-
-For every failed question in evaluation:
-
-\`\`\`
-1. Record the question
-2. Record retrieved evidence (all candidates with scores)
-3. Record generated answer
-4. Record expected answer
-5. Categorize failure type
-6. Identify probable root cause
-7. Propose mitigation
-8. Store in structured format for analysis
-\`\`\`
+This decomposition appears in the evaluation framework.
 
 ## Failure Log Format
 
@@ -590,16 +428,9 @@ For every failed question in evaluation:
   "root_cause": "Relevant chunk ranked 15th, outside top-5",
   "retrieved_evidence": [...],
   "mitigation": "Increase rerank_top_k from 5 to 10",
-  "timestamp": "2024-01-15T10:30:00Z"
+  "mitigation_worked": null
 }
 \`\`\`
-
-## Analysis Goals
-
-1. **Quantify**: What percentage of failures fall into each category?
-2. **Prioritize**: Which failure categories have the most impact?
-3. **Track**: Do architectural changes reduce specific failure types?
-4. **Predict**: Can we identify failure-prone question types?
 `
   },
 
@@ -613,228 +444,116 @@ For every failed question in evaluation:
 ## Threat Model
 
 The RAG pipeline processes untrusted input at multiple stages:
-1. **Uploaded documents** — may contain malicious content
-2. **Extracted text** — may contain prompt injection attempts
-3. **User queries** — may attempt to extract system information
-4. **LLM responses** — may be manipulated by injected instructions
+1. Uploaded documents — may contain malicious content
+2. Extracted text — may contain prompt injection
+3. User queries — may attempt system manipulation
+4. LLM responses — may be manipulated by injected instructions
 
-## Protections Implemented
+## Protections
 
-### 1. Input Validation
-- **File type**: Only .pdf files accepted
-- **File size**: Maximum 50MB per file
-- **Page count**: Maximum 500 pages per document
-- **Content hash**: SHA-256 computed for deduplication
-- **Path traversal**: File paths sanitized, no directory traversal possible
+### Input Validation
+- File type: Only .pdf accepted
+- File size: Max 50MB
+- Page count: Max 500 pages
+- Content hash: SHA-256 for deduplication
+- Path traversal: Sanitized via pathlib
 
-### 2. Prompt Injection Defense
-- Retrieved text is treated as untrusted data
-- System prompt explicitly instructs LLM to ignore instructions within context
-- Retrieved chunks are clearly delimited with markers
-- Maximum chunk length enforced (10,000 characters)
-- Suspicious patterns flagged (e.g., "ignore previous instructions")
+### Prompt Injection Defense
+- Retrieved text treated as untrusted
+- System prompt instructs LLM to ignore context instructions
+- Retrieved chunks clearly delimited
+- Max chunk length: 10,000 characters
+- Injection pattern detection in retrieved text
 
-### 3. Resource Protection
-- Maximum file size prevents disk exhaustion
-- Maximum page count prevents memory exhaustion
-- Maximum chunk size prevents prompt overflow
+### Resource Protection
+- Max file size prevents disk exhaustion
+- Max page count prevents memory exhaustion
+- Max chunk size prevents prompt overflow
 - Batch size limits prevent API rate limiting
-- Request timeouts prevent hanging connections
 
-### 4. Secrets Management
-- API keys stored in .env file (never committed)
-- .env listed in .gitignore
-- .env.example provided without real values
-- No secrets in log output
-- No secrets in error messages
-- Docker uses environment variables, not build args
+### Secrets Management
+- API keys in .env (never committed)
+- .env in .gitignore
+- .env.example without real values
+- No secrets in logs or error messages
 
-### 5. Network Security
-- CORS configured (restrict in production)
-- API endpoints validate input
-- No unnecessary information in error responses
-- Health endpoint doesn't expose internals
-
-### 6. Execution Security
+### Execution Security
 - Docker runs as non-root user
 - No shell injection in file handling
-- Path operations use pathlib (not string concatenation)
-- File writes are atomic where possible
+- Path operations use pathlib
 
 ## Security Checklist
-
-- [x] .env.example provided (no real keys)
+- [x] .env.example provided
 - [x] .env in .gitignore
 - [x] File type validation
 - [x] File size limits
-- [x] Page count limits
-- [x] Content length limits
 - [x] No secrets in logs
-- [x] No secrets in error messages
 - [x] Non-root Docker user
-- [x] Input validation on all API endpoints
-- [x] Prompt injection awareness in system prompt
-- [ ] Rate limiting (future)
-- [ ] Authentication (future)
-- [ ] Audit logging (future)
-- [ ] Malware scanning for uploads (future)
+- [x] Input validation on API
+- [x] Prompt injection awareness
 
 ## Known Limitations
-
-1. **No malware scanning**: Uploaded PDFs are not scanned for exploits
-2. **No authentication**: API is open (suitable for local/research use)
-3. **No rate limiting**: A single user could exhaust resources
-4. **Prompt injection is probabilistic**: No defense is 100% reliable
-5. **No encryption at rest**: Vector store is stored unencrypted on disk
+1. No malware scanning for uploads
+2. No authentication (suitable for local/research)
+3. No rate limiting
+4. Prompt injection defense is probabilistic
+5. No encryption at rest for vector store
 `
   },
 
   {
-    title: "Engineering Decisions",
+    title: "Decisions",
     path: "docs/DECISIONS.md",
     icon: "🧠",
     category: "Design",
     content: `# Engineering Decision Records
 
-## ADR-001: Why ChromaDB over FAISS/Pinecone/Weaviate?
+## ADR-001: ChromaDB over FAISS
+**Decision**: ChromaDB as primary vector store.
+**Alternatives**: FAISS (faster, no persistence), Pinecone (managed, paid), Weaviate (heavy).
+**Rationale**: Built-in persistence, metadata filtering, simple API, free, local.
+**Tradeoff**: Slower than FAISS at scale. Acceptable for research.
 
-**Decision**: Use ChromaDB as the primary vector store.
+## ADR-002: BM25 alongside dense retrieval
+**Decision**: Both dense and BM25 retrieval.
+**Rationale**: Dense fails on exact matches (names, numbers). BM25 fails on semantic similarity. Hybrid combines both.
+**Evidence**: IR literature consistently shows hybrid > either alone.
 
-**Alternatives considered**:
-- FAISS: Faster but no persistence, no metadata filtering, manual save/load
-- Pinecone: Managed service, requires API key and network, paid
-- Weaviate: Feature-rich but heavy, requires separate server
-- Qdrant: Good but less community support
+## ADR-003: Reciprocal Rank Fusion
+**Decision**: RRF for combining retrieval results.
+**Alternatives**: Weighted score fusion (needs normalization), Learning-to-rank (needs training data).
+**Rationale**: Parameter-free, robust to score scale differences, well-documented (Cormack et al., 2009).
 
-**Rationale**:
-- Built-in persistence (survives restarts without re-embedding)
-- Metadata filtering for future features (e.g., filter by document)
-- Simple API, no separate server process
-- Free and runs locally
-- Cosine similarity built-in
-- Adequate performance for <1M vectors
+## ADR-004: Cross-encoder reranking
+**Decision**: Cross-encoder (ms-marco-MiniLM) as reranker.
+**Rationale**: Bi-encoders fast but less accurate. Cross-encoders process query+document together. Reranking 20 candidates is fast enough.
+**Tradeoff**: ~50ms additional latency for improved precision.
 
-**Tradeoff**: Slower than FAISS at scale. Acceptable for research/prototype.
+## ADR-005: all-MiniLM-L6-v2 as default embedding
+**Decision**: Default to local sentence-transformers model.
+**Alternatives**: OpenAI (better, costs money), BGE-large (better, slower).
+**Rationale**: Free, fast, small (80MB), good enough quality, works offline.
 
----
+## ADR-006: Multiple chunking strategies
+**Decision**: 4 strategies (fixed, sentence, recursive, structure-aware).
+**Rationale**: Different document types benefit from different strategies. No single strategy is universally best.
 
-## ADR-002: Why BM25 alongside dense retrieval?
+## ADR-007: Abstention over always answering
+**Decision**: Explicit abstention when evidence is insufficient.
+**Rationale**: Cost of wrong answer > cost of no answer. System classifies: SUPPORTED, PARTIALLY_SUPPORTED, UNSUPPORTED, INSUFFICIENT_EVIDENCE.
 
-**Decision**: Implement both dense (embedding) and BM25 (lexical) retrieval.
+## ADR-008: Rule-based query classification
+**Decision**: Rule-based (not LLM-based) query classification.
+**Alternatives**: LLM classifier (adds latency, cost, noise).
+**Rationale**: Fast, deterministic, debuggable. Sufficient for the granularity needed.
 
-**Rationale**:
-Dense retrieval excels at semantic similarity but fails on:
-- Exact name matching ("What is the accuracy of BERT?")
-- Technical terms not in embedding vocabulary
-- Numerical queries ("What year was...")
-- Proper nouns
+## ADR-009: Evidence sufficiency before generation
+**Decision**: Assess evidence quality before generating answer.
+**Rationale**: Prevents hallucination by checking retrieval scores, agreement, coverage, and contradictions before LLM invocation.
 
-BM25 excels at these cases but fails on:
-- Semantic paraphrasing
-- Cross-lingual queries
-- Conceptual similarity
-
-Hybrid retrieval (RRF fusion) combines both signals, consistently outperforming either alone in IR benchmarks.
-
-**Evidence**: Multiple IR papers show hybrid > dense-only or BM25-only. Our ablation study (Experiment M, N) will measure the specific contribution.
-
----
-
-## ADR-003: Why Reciprocal Rank Fusion (RRF)?
-
-**Decision**: Use RRF for combining dense and BM25 results.
-
-**Alternatives considered**:
-- Weighted score fusion: Requires score normalization, sensitive to scale
-- Learning-to-rank: Requires training data, complex
-- Interleaving: Simple but doesn't weight by relevance
-
-**Rationale**:
-- Parameter-free (except k, which has a standard default of 60)
-- Robust to score scale differences between retrievers
-- Well-documented in IR literature (Cormack et al., 2009)
-- Simple to implement and debug
-- Consistently effective in practice
-
----
-
-## ADR-004: Why cross-encoder reranking?
-
-**Decision**: Use a cross-encoder (ms-marco-MiniLM) as a reranker after initial retrieval.
-
-**Rationale**:
-- Bi-encoders (used for initial retrieval) are fast but less accurate
-- Cross-encoders process query+document together, capturing interactions
-- Reranking a small candidate set (20) is fast enough
-- Significantly improves precision at the cost of slight latency increase
-
-**Tradeoff**: ~50ms additional latency per query. Worth it for improved accuracy.
-
----
-
-## ADR-005: Why all-MiniLM-L6-v2 as default embedding?
-
-**Decision**: Default to sentence-transformers/all-MiniLM-L6-v2.
-
-**Alternatives considered**:
-- OpenAI text-embedding-3-small: Better quality, costs money
-- BGE-large: Better quality, larger model, slower
-- E5-large: Good quality, larger model
-
-**Rationale**:
-- Free (no API cost)
-- Fast (~50 chunks/sec on CPU)
-- Small (80MB model)
-- Good enough quality for most use cases
-- Works offline
-- Easy to swap later (one config line)
-
-**Tradeoff**: Lower quality than larger models. Acceptable for development.
-
----
-
-## ADR-006: Why multiple chunking strategies?
-
-**Decision**: Implement 4 chunking strategies (fixed, sentence, recursive, structure-aware).
-
-**Rationale**:
-Different document types benefit from different strategies:
-- Technical docs with clear sections → structure-aware
-- Legal documents → sentence-based (preserve complete sentences)
-- Research papers → recursive (natural paragraph boundaries)
-- Mixed content → fixed (predictable, simple)
-
-No single strategy is universally best. The experiment framework allows empirical comparison.
-
----
-
-## ADR-007: Why abstention instead of always answering?
-
-**Decision**: Implement explicit abstention when evidence is insufficient.
-
-**Rationale**:
-A RAG system that always answers will hallucinate on unanswerable questions. The cost of a wrong answer (misinformation) is higher than the cost of no answer.
-
-The system classifies answers as:
-- SUPPORTED (high confidence)
-- PARTIALLY_SUPPORTED (medium confidence)
-- UNSUPPORTED (low confidence)
-- INSUFFICIENT_EVIDENCE (abstain)
-
-**Tradeoff**: Lower answer coverage but higher reliability.
-
----
-
-## ADR-008: Why Pydantic models for data flow?
-
-**Decision**: Use Pydantic models for all inter-component data.
-
-**Rationale**:
-- Type safety: Catch errors at development time
-- Validation: Automatic input validation
-- Serialization: Easy JSON conversion for API
-- Documentation: Models serve as interface documentation
-- IDE support: Autocomplete and type hints
+## ADR-010: Pydantic models for data flow
+**Decision**: Pydantic models for all inter-component data.
+**Rationale**: Type safety, validation, serialization, documentation, IDE support.
 `
   },
 
@@ -845,141 +564,363 @@ The system classifies answers as:
     category: "Operations",
     content: `# Reproducibility Guide
 
-## Goal
-
-A researcher should be able to clone this repository and reproduce all experiments and results.
-
 ## Setup
-
-### Prerequisites
-- Python 3.11+
-- pip or conda
-- OpenAI API key (for LLM generation)
-
-### Installation
-
 \`\`\`bash
-# Clone
 git clone https://github.com/arraimal70-code/RAG-Pipeline.git
 cd RAG-Pipeline
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\\Scripts\\activate  # Windows
-
-# Install dependencies
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# Configure
-cp .env.example .env
-# Edit .env with your OPENAI_API_KEY
+cp .env.example .env  # Add OPENAI_API_KEY
 \`\`\`
 
-### Docker (alternative)
+## Running Experiments
+\`\`\`bash
+# 1. Add documents
+mkdir -p data/documents && cp *.pdf data/documents/
 
+# 2. Ingest
+python -m src.pipeline ingest
+
+# 3. Run experiments
+python experiments/runner.py
+
+# 4. View results
+cat experiments/results/COMPARISON.md
+\`\`\`
+
+## Docker
 \`\`\`bash
 docker build -t rag-pipeline .
 docker run -p 8000:8000 --env-file .env rag-pipeline
 \`\`\`
 
-## Running Experiments
-
-### 1. Prepare documents
-
-\`\`\`bash
-mkdir -p data/documents
-cp your_pdfs/*.pdf data/documents/
-\`\`\`
-
-### 2. Ingest documents
-
-\`\`\`bash
-python -m src.pipeline ingest
-\`\`\`
-
-### 3. Run experiments
-
-\`\`\`bash
-python experiments/run_experiments.py
-\`\`\`
-
-Results are saved to \`experiments/results/\`.
-
-### 4. View comparison
-
-\`\`\`bash
-cat experiments/results/COMPARISON.md
-\`\`\`
-
-## Configuration
-
-All experiments use configurations from \`src/core/config.py\`. Each experiment records its full configuration snapshot in the results JSON.
-
-To run a custom experiment:
-
-\`\`\`python
-from src.core.config import config
-from src.evaluation.evaluator import Evaluator
-
-# Modify config
-config.retrieval.rerank_enabled = False
-config.chunking.strategy = "structure"
-
-# Run
-evaluator = Evaluator()
-result = evaluator.run_experiment("my_experiment", "Testing structure chunking without rerank", questions)
-\`\`\`
-
-## Dataset Format
-
-Benchmark dataset is in \`benchmarks/benchmark_dataset.json\`.
-
-Each question requires:
-- \`question\`: The question text
-- \`expected_answer\`: Verified correct answer
-- \`source_document\`: Filename containing the answer
-- \`source_page\`: Page number (if known)
-- \`relevant_chunk_ids\`: IDs of chunks containing the answer
-- \`question_type\`: Category (see below)
-- \`difficulty\`: 1-5
-- \`answerable\`: Whether the answer exists in documents
-
-Question types: direct_lookup, multi_hop, numerical, definition, comparison, summarization, cross_section, cross_document, ambiguous, unanswerable, adversarial, table_based
-
 ## Result Format
-
-Each experiment produces a JSON file with:
-- \`experiment_id\`: Unique ID
-- \`name\`: Experiment name
-- \`config_snapshot\`: Full configuration at time of run
-- \`dataset_version\`: Version of benchmark dataset used
-- \`timestamp\`: When the experiment ran
-- \`metrics\`: Aggregate metrics (recall@K, MRR, etc.)
-- \`question_results\`: Per-question detailed results
-- \`total_latency_ms\`: Total execution time
-- \`errors\`: Any errors encountered
+Each experiment produces JSON with:
+- experiment_id, name, hypothesis, method
+- config_snapshot (full configuration at time of run)
+- dataset_version, timestamp
+- metrics (aggregate)
+- question_results (per-question detail)
+- total_latency_ms, total_tokens, estimated_cost
+- errors, interpretation, limitations
 
 ## Version Pinning
-
-\`\`\`
-# requirements.txt pins exact versions for reproducibility
-langchain==0.3.0
-chromadb==0.5.0
-sentence-transformers==3.0.0
-rank-bm25==0.2.2
-openai==1.50.0
-\`\`\`
+requirements.txt pins exact versions for reproducibility.
 
 ## Random Seeds
-
-Where applicable, random seeds should be set:
 \`\`\`python
 import numpy as np
 np.random.seed(42)
 \`\`\`
+Note: LLM outputs are inherently non-deterministic even at temperature=0.
+`
+  },
 
-Note: LLM outputs are inherently non-deterministic even at temperature=0 due to floating-point variations. Report metrics as averages over multiple runs where precision matters.
+  {
+    title: "Real-World Case Study",
+    path: "docs/REAL_WORLD_CASE_STUDY.md",
+    icon: "📋",
+    category: "Case Study",
+    content: `# Real-World Case Study: Financial Document Intelligence
+
+## Problem
+
+Financial analysts spend hours searching through quarterly reports, annual filings, and research notes to find specific data points, compare performance across periods, and verify claims. This is time-consuming, error-prone, and does not scale.
+
+## Current Difficulty
+
+- Manual search through hundreds of pages
+- Difficulty finding specific numbers in tables
+- Hard to compare data across documents
+- Risk of misquoting or misattributing data
+- No way to verify claims against source documents quickly
+
+## Proposed RAG Solution
+
+A document-grounded QA system that:
+1. Ingests financial PDFs (quarterly reports, annual filings)
+2. Allows natural-language questions about financial data
+3. Returns answers with page-level citations
+4. Flags contradictions between documents
+5. Refuses to answer when evidence is insufficient
+
+## System Architecture
+
+- **Parsing**: PyMuPDF with structure detection for financial tables
+- **Chunking**: Structure-aware (sections, tables, footnotes)
+- **Retrieval**: Adaptive hybrid (BM25-heavy for numerical queries)
+- **Generation**: GPT-4o-mini with strict grounding
+- **Citations**: Validated against retrieved chunks
+- **Contradictions**: Detected across documents (e.g., different revenue figures)
+
+## Evaluation
+
+### Benchmark Construction
+- 50+ questions across financial documents
+- Categories: numerical lookup, comparison, temporal, cross-document
+- Unanswerable questions (data not in documents)
+- Adversarial questions (prompt injection attempts)
+
+### Metrics
+- Retrieval: Recall@5 for financial data points
+- Generation: Numerical accuracy (exact match for numbers)
+- Citation: Page-level accuracy
+- Abstention: Correct refusal on unanswerable questions
+
+## Measured Improvement
+
+> **RESULTS PENDING** — Requires actual financial documents and API access.
+
+The infrastructure is complete. When executed, the system will measure:
+- Time saved per query vs. manual search
+- Retrieval accuracy for numerical data
+- Citation accuracy (page-level)
+- Hallucination rate for financial claims
+- Abstention accuracy
+
+## Failure Cases (Anticipated)
+
+1. **Table extraction**: Financial tables may not parse correctly
+2. **Numerical precision**: LLM may round or misread numbers
+3. **Cross-reference**: Comparing data across documents requires multi-hop
+4. **Temporal reasoning**: "How did X change from Q1 to Q2?" requires temporal retrieval
+5. **Abbreviations**: Financial jargon may not match embedding vocabulary
+
+## Limitations
+
+1. Only handles PDF format
+2. No OCR for scanned financial documents
+3. Table extraction is heuristic-based
+4. Numerical accuracy depends on LLM capability
+5. Does not perform calculations (only retrieves stated numbers)
+6. Requires API access for LLM generation
+
+## Practical Usefulness
+
+Even with limitations, the system can:
+- Quickly locate specific data points in large reports
+- Verify claims against source documents
+- Flag contradictions between different reports
+- Reduce time spent on manual document search
+- Provide auditable citations for every answer
+`
+  },
+
+  {
+    title: "Research Log",
+    path: "docs/RESEARCH_LOG.md",
+    icon: "📝",
+    category: "Research",
+    content: `# Research Log
+
+This document records the evolution of experimental findings.
+
+---
+
+## Entry 1: Initial Architecture Decision
+
+### Hypothesis
+Hybrid retrieval (dense + BM25) will outperform either method alone for financial document QA.
+
+### Experiment
+EXP-01 (dense only) vs EXP-02 (BM25 only) vs EXP-03 (hybrid RRF)
+
+### Result
+**RESULTS PENDING**
+
+### Interpretation
+Expected: Hybrid will excel on both exact-match queries (via BM25) and conceptual queries (via dense). Pure dense will struggle with specific financial terms. Pure BM25 will miss semantically similar but lexically different passages.
+
+### Next Experiment
+If hybrid wins, test whether adaptive weighting (EXP-06) improves further.
+
+---
+
+## Entry 2: Adaptive Retrieval
+
+### Hypothesis
+Query-type-aware adaptive weighting will improve retrieval over fixed 50/50 hybrid.
+
+### Experiment
+EXP-03 (fixed hybrid) vs EXP-06 (adaptive hybrid)
+
+### Result
+**RESULTS PENDING**
+
+### Interpretation
+Expected: Adaptive will help most on exact queries (where BM25 should dominate) and conceptual queries (where dense should dominate). The benefit may be small if the dataset is mostly one type.
+
+### Failure Mode
+If adaptive performs worse, it may be because:
+- Query classifier is inaccurate
+- Weight differences are too small to matter
+- The dataset doesn't have enough variety in query types
+
+---
+
+## Entry 3: Evidence Sufficiency
+
+### Hypothesis
+Evidence sufficiency assessment will reduce hallucination without excessive false refusals.
+
+### Experiment
+EXP-19 (full pipeline with evidence check) vs EXP-ABL_no_evidence_check
+
+### Result
+**RESULTS PENDING**
+
+### Interpretation
+Expected: Hallucination rate should decrease. Abstention rate should increase. The question is whether the increase in correct abstentions outweighs the increase in false refusals.
+
+### Key Metric
+F1 score of abstention decisions (harmonic mean of correct abstention rate and correct answer rate).
+
+---
+
+## Entry 4: Reranking Impact
+
+### Hypothesis
+Cross-encoder reranking will significantly improve precision at the cost of ~50ms latency.
+
+### Experiment
+EXP-09_full_with_rerank vs EXP-09_full_no_rerank
+
+### Result
+**RESULTS PENDING**
+
+### Interpretation
+Expected: Precision@5 should improve substantially. The question is whether the latency cost is acceptable for the quality improvement.
+
+---
+
+*This log will be updated as experiments are executed and results become available.*
+`
+  },
+
+  {
+    title: "Final Review",
+    path: "docs/FINAL_REVIEW.md",
+    icon: "✅",
+    category: "Audit",
+    content: `# Final Review — Brutally Honest Assessment
+
+## 1. What did we actually build?
+
+A modular, evidence-aware RAG pipeline with:
+- Multiple retrieval strategies (dense, BM25, hybrid, reranked)
+- Adaptive retrieval based on query classification
+- Evidence sufficiency assessment before generation
+- Contradiction detection across sources
+- Citation validation against retrieved evidence
+- Comprehensive evaluation framework
+- Experiment runner with 19+ experiments
+- 15-category failure taxonomy
+- Full test suite
+- Docker + CI/CD
+
+## 2. What is technically difficult about it?
+
+- Implementing adaptive retrieval that actually improves over fixed weights (unproven)
+- Evidence sufficiency assessment that balances coverage vs. false refusal
+- Contradiction detection without expensive NLI models
+- Citation validation that catches real errors without false positives
+- Building a benchmark dataset with verified ground truth
+
+## 3. What is genuinely original?
+
+- The combination of adaptive retrieval + evidence sufficiency + contradiction detection in a single evaluable framework
+- The experimental methodology for measuring which components matter
+- The 15-category failure taxonomy applied to RAG
+- The cost-quality frontier analysis approach
+
+## 4. What did we experimentally prove?
+
+**NOTHING YET.** Results are pending. The infrastructure is complete but experiments have not been executed with real data.
+
+## 5. What did we fail to prove?
+
+Everything. No experiments have been run. All hypotheses are untested.
+
+## 6. What are the biggest weaknesses?
+
+1. **No experimental results** — the entire research contribution is unvalidated
+2. **Benchmark is a template** — needs real verified questions
+3. **Evaluation is heuristic** — factual correctness uses support-level as proxy
+4. **Single embedding model** — only MiniLM tested by default
+5. **Single LLM** — only GPT-4o-mini tested
+6. **PDF-only** — no other document formats
+7. **No OCR** — scanned documents not handled
+8. **Contradiction detection is heuristic** — may miss subtle contradictions
+
+## 7. Where does the system fail?
+
+- Table extraction from financial documents
+- Numerical precision (LLM may round numbers)
+- Cross-document reasoning for complex multi-hop
+- Adversarial content in documents
+- Very long documents (>500 pages)
+- Queries requiring domain-specific knowledge not in embeddings
+
+## 8. Scalability limitations?
+
+- ChromaDB works for <1M vectors but degrades beyond that
+- BM25 index is in-memory — large corpora need disk-based approach
+- Reranking adds ~50ms per query — at scale, need batch processing
+- No distributed indexing or retrieval
+- No caching layer for repeated queries
+
+## 9. Security limitations?
+
+- No malware scanning for PDFs
+- No authentication on API
+- No rate limiting
+- Prompt injection defense is probabilistic
+- No encryption at rest
+
+## 10. Research limitations?
+
+- No statistical analysis (confidence intervals, significance tests)
+- No human evaluation of answer quality
+- No comparison with existing RAG systems
+- No ablation of individual components with statistical evidence
+- Dataset construction methodology not validated by multiple annotators
+
+## 11. What would an expert criticize?
+
+- "You claim adaptive retrieval helps but have no results"
+- "Your evaluation metrics are all heuristic proxies"
+- "Your benchmark is a template, not a real dataset"
+- "You haven't compared against any baseline RAG system"
+- "Your contradiction detection is too simplistic"
+- "You haven't measured inter-annotator agreement on your benchmark"
+
+## 12. What should be improved next?
+
+1. Execute experiments and populate results
+2. Build real benchmark with verified ground truth
+3. Add LLM-as-judge evaluation
+4. Add statistical analysis (bootstrap confidence intervals)
+5. Compare against existing RAG systems (RAGAS, ARES)
+6. Improve contradiction detection with NLI models
+7. Add multi-format document support
+8. Add caching and performance optimization
+
+## Ratings (honest)
+
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Technical Strength | 7/10 | Solid architecture, unvalidated claims |
+| Research Strength | 4/10 | Good framework, no results |
+| Engineering Strength | 8/10 | Clean code, good tests, modular |
+| Reliability | 6/10 | Abstention + validation, but untested |
+| Originality | 6/10 | Good combination of ideas, not groundbreaking |
+| Real-world Usefulness | 5/10 | Useful concept, needs validation |
+| Reproducibility | 8/10 | Docker, pinned deps, config snapshots |
+| Remaining Weaknesses | Significant | No results, heuristic evaluation, template dataset |
+
+## Overall
+
+This is a well-engineered framework for studying RAG systems. The architecture is sound, the code is clean, and the experimental methodology is rigorous. However, **the project's central claim — that adaptive retrieval and evidence sufficiency improve reliability — is completely unvalidated.** Until experiments are executed and results are populated, this is a promising infrastructure, not a research contribution.
 `
   },
 ];

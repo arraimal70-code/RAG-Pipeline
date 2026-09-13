@@ -3,21 +3,25 @@ export interface SourceFile {
   language: string;
   description: string;
   phase: string;
+  category: string;
   code: string;
 }
 
 export const sourceFiles: SourceFile[] = [
-  // ─── CORE ───────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // CORE
+  // ═══════════════════════════════════════════════════════════
   {
     path: "src/core/config.py",
     language: "python",
-    description: "Central configuration with environment-aware defaults and validation.",
+    description: "Central configuration with environment-aware defaults, validation, and experiment override support.",
     phase: "Phase 2",
+    category: "Core",
     code: `"""
 src/core/config.py — Central configuration management.
 
-All tunable parameters, paths, and environment variables live here.
-Configuration is validated at import time to fail fast on misconfiguration.
+All tunable parameters live here. Configuration is validated at import
+time. Experiments can override any parameter without modifying this file.
 """
 
 import os
@@ -28,12 +32,9 @@ from typing import Optional, Literal
 from dotenv import load_dotenv
 
 load_dotenv()
-
 logger = logging.getLogger(__name__)
 
-# ──────────────────────────────────────────────
-# Base paths
-# ──────────────────────────────────────────────
+# ── Paths ──────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 DOCUMENTS_DIR = DATA_DIR / "documents"
@@ -43,26 +44,22 @@ EXPERIMENTS_DIR = BASE_DIR / "experiments" / "results"
 EVAL_DIR = BASE_DIR / "benchmarks"
 LOGS_DIR = BASE_DIR / "logs"
 
-# Ensure directories exist
 for d in [DOCUMENTS_DIR, CHROMA_DIR, BM25_INDEX_DIR, EXPERIMENTS_DIR, EVAL_DIR, LOGS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
 class ChunkingConfig:
-    """Chunking strategy configuration."""
     strategy: Literal["fixed", "sentence", "recursive", "structure"] = "recursive"
-    chunk_size: int = 512          # tokens (approximated as chars/4)
-    chunk_overlap: int = 64        # tokens
-    min_chunk_size: int = 50       # tokens — discard tiny fragments
-    max_chunk_size: int = 1024     # tokens — hard ceiling
-    respect_sentence_boundaries: bool = True
+    chunk_size: int = 512          # tokens (approx chars/4)
+    chunk_overlap: int = 64
+    min_chunk_size: int = 50
+    max_chunk_size: int = 1024
     separators: list[str] = field(default_factory=lambda: ["\\n\\n", "\\n", ". ", " ", ""])
 
 
 @dataclass
 class EmbeddingConfig:
-    """Embedding model configuration."""
     provider: Literal["local", "openai"] = "local"
     model_name: str = "all-MiniLM-L6-v2"
     dimension: int = 384
@@ -72,84 +69,81 @@ class EmbeddingConfig:
 
 @dataclass
 class RetrievalConfig:
-    """Retrieval pipeline configuration."""
     # Candidate generation
-    dense_top_k: int = 50          # initial dense candidates
-    bm25_top_k: int = 50           # initial BM25 candidates
+    dense_top_k: int = 50
+    bm25_top_k: int = 50
     # Fusion
     fusion_method: Literal["rrf", "weighted", "interleave"] = "rrf"
-    rrf_k: int = 60                # RRF constant
-    dense_weight: float = 0.6      # for weighted fusion
+    rrf_k: int = 60
+    dense_weight: float = 0.6
     bm25_weight: float = 0.4
     # Post-fusion
-    post_fusion_top_k: int = 20    # after fusion, before reranking
+    post_fusion_top_k: int = 20
     # Reranking
     rerank_enabled: bool = True
-    rerank_top_k: int = 5          # final candidates to LLM
+    rerank_top_k: int = 5
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    # Adaptive retrieval
+    adaptive_enabled: bool = True
+    adaptive_strategy: Literal["query_type", "confidence", "hybrid"] = "query_type"
 
 
 @dataclass
 class GenerationConfig:
-    """LLM generation configuration."""
     provider: Literal["openai"] = "openai"
     model: str = "gpt-4o-mini"
     temperature: float = 0.0
     max_tokens: int = 1024
-    abstention_threshold: float = 0.5  # confidence below which we abstain
+    abstention_threshold: float = 0.5
 
 
 @dataclass
-class EvaluationConfig:
-    """Evaluation framework configuration."""
-    dataset_path: Path = EVAL_DIR / "benchmark_dataset.json"
-    results_dir: Path = EXPERIMENTS_DIR
-    metrics: list[str] = field(default_factory=lambda: [
-        "recall@1", "recall@3", "recall@5", "recall@10",
-        "mrr", "ndcg@5", "precision@5",
-        "factual_correctness", "groundedness",
-        "citation_accuracy", "hallucination_rate",
-        "abstention_accuracy", "latency_p50", "latency_p95",
-    ])
+class EvidenceConfig:
+    """Evidence sufficiency and contradiction detection."""
+    sufficiency_enabled: bool = True
+    min_evidence_score: float = 0.3
+    contradiction_threshold: float = 0.7
+    max_retrieval_attempts: int = 2  # adaptive: retrieve again if insufficient
 
 
 @dataclass
 class SecurityConfig:
-    """Security and input validation configuration."""
     max_file_size_mb: int = 50
     max_pages_per_document: int = 500
-    max_chunk_length: int = 10000  # characters — reject abnormally large chunks
+    max_chunk_length: int = 10000
     allowed_extensions: list[str] = field(default_factory=lambda: [".pdf"])
     sanitize_retrieved_text: bool = True
-    max_prompt_injection_length: int = 200  # flag chunks with suspicious patterns
+    injection_patterns: list[str] = field(default_factory=lambda: [
+        "ignore previous instructions",
+        "ignore all previous",
+        "you are now",
+        "disregard your",
+        "new instructions:",
+    ])
 
 
 @dataclass
 class AppConfig:
-    """Top-level application configuration."""
     chunking: ChunkingConfig = field(default_factory=ChunkingConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
-    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
+    evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
 
     def validate(self) -> None:
-        """Validate configuration at startup."""
         if not self.openai_api_key and self.generation.provider == "openai":
-            logger.warning(
-                "OPENAI_API_KEY not set. LLM generation will fail. "
-                "Set it in .env or environment."
-            )
+            logger.warning("OPENAI_API_KEY not set. LLM generation will fail.")
         if self.chunking.chunk_overlap >= self.chunking.chunk_size:
             raise ValueError("chunk_overlap must be < chunk_size")
         if self.retrieval.rerank_top_k > self.retrieval.post_fusion_top_k:
             raise ValueError("rerank_top_k must be <= post_fusion_top_k")
+        if abs(self.retrieval.dense_weight + self.retrieval.bm25_weight - 1.0) > 0.01:
+            raise ValueError("dense_weight + bm25_weight must equal 1.0")
 
 
-# Singleton config instance
 config = AppConfig()
 config.validate()
 `
@@ -158,14 +152,14 @@ config.validate()
   {
     path: "src/core/models.py",
     language: "python",
-    description: "Core data models — the types that flow through the entire pipeline.",
+    description: "Core Pydantic data models — the type contracts flowing through the entire pipeline.",
     phase: "Phase 2",
+    category: "Core",
     code: `"""
 src/core/models.py — Core data models.
 
-These Pydantic models define the data contracts between pipeline stages.
-Every component receives and returns these types, ensuring type safety
-and making the data flow explicit.
+Every pipeline stage receives and returns these types.
+This ensures type safety and makes data flow explicit.
 """
 
 from __future__ import annotations
@@ -176,9 +170,6 @@ from pydantic import BaseModel, Field
 import uuid
 
 
-# ──────────────────────────────────────────────
-# Enums
-# ──────────────────────────────────────────────
 class QuestionType(str, Enum):
     DIRECT_LOOKUP = "direct_lookup"
     MULTI_HOP = "multi_hop"
@@ -192,10 +183,12 @@ class QuestionType(str, Enum):
     UNANSWERABLE = "unanswerable"
     ADVERSARIAL = "adversarial"
     TABLE_BASED = "table_based"
+    CONTRADICTORY = "contradictory"
+    TEMPORAL = "temporal"
+    LONG_CONTEXT = "long_context"
 
 
 class SupportLevel(str, Enum):
-    """How well the answer is supported by retrieved evidence."""
     SUPPORTED = "supported"
     PARTIALLY_SUPPORTED = "partially_supported"
     UNSUPPORTED = "unsupported"
@@ -217,13 +210,22 @@ class FailureCategory(str, Enum):
     CONTRADICTORY_SOURCE = "contradictory_source_failure"
     UNANSWERABLE = "unanswerable_question_failure"
     LATENCY = "latency_failure"
+    PROMPT_INJECTION = "prompt_injection_failure"
 
 
-# ──────────────────────────────────────────────
-# Document models
-# ──────────────────────────────────────────────
+class QueryType(str, Enum):
+    """Classified query type for adaptive retrieval."""
+    EXACT = "exact"           # names, numbers, identifiers → lexical-heavy
+    CONCEPTUAL = "conceptual" # abstract concepts → semantic-heavy
+    TECHNICAL = "technical"   # domain-specific → balanced hybrid
+    AMBIGUOUS = "ambiguous"   # unclear intent → expanded retrieval
+    MULTI_HOP = "multi_hop"   # requires multiple passages → broader retrieval
+    COMPARISON = "comparison" # compare entities → multi-document
+    UNKNOWN = "unknown"       # default
+
+
+# ── Document models ────────────────────────────────
 class DocumentMetadata(BaseModel):
-    """Metadata extracted from a source document."""
     document_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     filename: str
     file_path: str
@@ -231,95 +233,108 @@ class DocumentMetadata(BaseModel):
     num_pages: int
     title: Optional[str] = None
     author: Optional[str] = None
-    created_at: Optional[str] = None
     ingested_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
-    content_hash: str = ""  # SHA-256 of content for dedup
+    content_hash: str = ""
 
 
 class TextChunk(BaseModel):
-    """A chunk of text with full provenance tracking."""
     chunk_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     document_id: str
     filename: str
     page_number: int
     section: Optional[str] = None
     content: str
-    char_offset: int = 0           # position in original page
+    char_offset: int = 0
     token_count: int = 0
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class EmbeddedChunk(TextChunk):
-    """A chunk with its embedding vector."""
     embedding: list[float] = Field(default_factory=list)
 
 
-# ──────────────────────────────────────────────
-# Retrieval models
-# ──────────────────────────────────────────────
+# ── Retrieval models ───────────────────────────────
 class RetrievalResult(BaseModel):
-    """A single retrieved chunk with its score."""
     chunk: TextChunk
     score: float
-    retrieval_method: str          # "dense", "bm25", "hybrid", "reranked"
+    retrieval_method: str
     rank: int
 
 
 class RetrievalOutput(BaseModel):
-    """Complete retrieval stage output."""
     query: str
     candidates: list[RetrievalResult]
     total_candidates: int
     retrieval_latency_ms: float
     method_details: dict[str, Any] = Field(default_factory=dict)
+    query_type: Optional[QueryType] = None
+    adaptive_weights: Optional[dict[str, float]] = None
 
 
-# ──────────────────────────────────────────────
-# Generation models
-# ──────────────────────────────────────────────
+# ── Evidence models ────────────────────────────────
+class EvidenceAssessment(BaseModel):
+    """Assessment of whether retrieved evidence is sufficient."""
+    is_sufficient: bool
+    confidence: float              # 0.0 to 1.0
+    evidence_score: float          # aggregate quality score
+    coverage: float                # how much of the question is covered
+    agreement: float               # do sources agree with each other?
+    contradictions: list[dict] = Field(default_factory=list)
+    recommendation: Literal["answer", "retrieve_more", "abstain"] = "answer"
+    reasoning: str = ""
+
+
+class Contradiction(BaseModel):
+    """A detected contradiction between sources."""
+    claim_a: str
+    claim_b: str
+    source_a: str
+    source_b: str
+    page_a: int
+    page_b: int
+    severity: Literal["minor", "major", "critical"] = "major"
+
+
+# ── Generation models ──────────────────────────────
 class Citation(BaseModel):
-    """A validated citation linking answer to evidence."""
     citation_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     document_id: str
     filename: str
     page_number: int
     section: Optional[str] = None
     chunk_id: str
-    relevant_text: str             # the specific evidence span
-    validated: bool = False        # has this been verified against source?
+    relevant_text: str
+    validated: bool = False
 
 
 class GenerationOutput(BaseModel):
-    """Complete generation stage output."""
     answer: str
     support_level: SupportLevel
-    confidence: float              # 0.0 to 1.0
+    confidence: float
     citations: list[Citation] = Field(default_factory=list)
-    reasoning: Optional[str] = None  # chain-of-thought if available
+    contradictions: list[Contradiction] = Field(default_factory=list)
     generation_latency_ms: float = 0.0
     token_usage: dict[str, int] = Field(default_factory=dict)
     abstained: bool = False
 
 
 class QueryResponse(BaseModel):
-    """Full API response for a query."""
     query_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     question: str
     answer: str
     support_level: SupportLevel
     confidence: float
     citations: list[Citation] = Field(default_factory=list)
+    contradictions: list[Contradiction] = Field(default_factory=list)
     retrieval_metadata: dict[str, Any] = Field(default_factory=dict)
+    evidence_assessment: Optional[EvidenceAssessment] = None
     latency: dict[str, float] = Field(default_factory=dict)
     token_usage: dict[str, int] = Field(default_factory=dict)
     abstained: bool = False
 
 
-# ──────────────────────────────────────────────
-# Evaluation models
-# ──────────────────────────────────────────────
+# ── Evaluation models ──────────────────────────────
 class BenchmarkQuestion(BaseModel):
-    """A single evaluation question with ground truth."""
     question_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     question: str
     expected_answer: str
@@ -327,984 +342,252 @@ class BenchmarkQuestion(BaseModel):
     source_page: Optional[int] = None
     relevant_chunk_ids: list[str] = Field(default_factory=list)
     question_type: QuestionType = QuestionType.DIRECT_LOOKUP
-    difficulty: int = 1            # 1-5
+    difficulty: int = 1
     answerable: bool = True
     notes: Optional[str] = None
 
 
 class EvaluationResult(BaseModel):
-    """Result of evaluating a single question."""
     question_id: str
     question: str
     expected_answer: str
     generated_answer: str
     support_level: SupportLevel
-    # Retrieval metrics
     retrieved_correct_source: bool = False
     retrieved_correct_passage: bool = False
     recall_at_k: dict[str, float] = Field(default_factory=dict)
-    # Generation metrics
     factual_correctness: float = 0.0
     groundedness: float = 0.0
     citation_accuracy: float = 0.0
     hallucination_detected: bool = False
-    # Metadata
     latency_ms: float = 0.0
     failure_category: Optional[FailureCategory] = None
     failure_notes: Optional[str] = None
 
 
 class ExperimentResult(BaseModel):
-    """Result of a complete experiment run."""
     experiment_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     description: str
+    hypothesis: str
+    method: str
     config_snapshot: dict[str, Any]
     dataset_version: str
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
-    # Aggregate metrics
     metrics: dict[str, float] = Field(default_factory=dict)
-    # Per-question results
     question_results: list[EvaluationResult] = Field(default_factory=list)
-    # System metrics
     total_latency_ms: float = 0.0
     total_tokens: int = 0
     estimated_cost_usd: float = 0.0
     errors: list[str] = Field(default_factory=list)
+    interpretation: str = ""
+    limitations: str = ""
+    next_experiment: str = ""
 `
   },
 
-  // ─── PARSING ───────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // ADAPTIVE RETRIEVAL
+  // ═══════════════════════════════════════════════════════════
   {
-    path: "src/parsing/pdf_parser.py",
+    path: "src/adaptive/query_analyzer.py",
     language: "python",
-    description: "Robust PDF parsing with structure detection and metadata extraction.",
-    phase: "Phase 3",
+    description: "Query classification for adaptive retrieval — determines optimal retrieval strategy per query.",
+    phase: "Phase 9",
+    category: "Adaptive",
     code: `"""
-src/parsing/pdf_parser.py — Robust PDF document parser.
+src/adaptive/query_analyzer.py — Query classification for adaptive retrieval.
 
-Handles normal text PDFs, multi-page documents, metadata extraction,
-repeated header/footer detection, and graceful degradation for
-malformed files.
-"""
+Classifies queries into types that map to retrieval strategies:
+- EXACT (names, numbers, IDs) → lexical-heavy (BM25)
+- CONCEPTUAL (abstract ideas) → semantic-heavy (dense)
+- TECHNICAL (domain terms) → balanced hybrid
+- AMBIGUOUS (unclear intent) → expanded retrieval
+- MULTI_HOP (multi-passage) → broader candidates + reranking
+- COMPARISON (compare entities) → multi-document retrieval
 
-import hashlib
-import logging
-import re
-from pathlib import Path
-from typing import Optional
+WHY: Different query types benefit from different retrieval strategies.
+A query like "What is the revenue in Q3 2024?" needs lexical matching.
+A query like "How does the methodology compare to prior work?" needs
+semantic understanding. Using one strategy for all queries leaves
+retrieval quality on the table.
 
-from pypdf import PdfReader, PageObject
-from pypdf.errors import PdfReadError
-
-from src.core.models import DocumentMetadata, TextChunk
-from src.core.config import config
-
-logger = logging.getLogger(__name__)
-
-
-class PDFParser:
-    """
-    Parses PDF files into structured text chunks with full metadata.
-
-    Design decisions:
-    - Uses pypdf (pure Python) for reliability over speed
-    - Detects and removes repeated headers/footers
-    - Preserves page numbers for citation tracking
-    - Handles malformed PDFs with graceful degradation
-    - Computes content hash for deduplication
-    """
-
-    def __init__(self):
-        self.security = config.security
-
-    def parse(self, file_path: Path) -> tuple[DocumentMetadata, list[TextChunk]]:
-        """
-        Parse a PDF file into metadata and text chunks.
-
-        Returns:
-            Tuple of (DocumentMetadata, list[TextChunk])
-
-        Raises:
-            ValueError: If file fails validation
-            PdfReadError: If PDF is unreadable
-        """
-        # Validate before parsing
-        self._validate_file(file_path)
-
-        try:
-            reader = PdfReader(str(file_path))
-        except PdfReadError as e:
-            logger.error(f"Failed to read PDF {file_path}: {e}")
-            raise
-
-        # Extract metadata
-        metadata = self._extract_metadata(file_path, reader)
-
-        # Extract text per page
-        pages_text = self._extract_page_texts(reader, metadata.num_pages)
-
-        # Detect and remove repeated headers/footers
-        pages_text = self._remove_repeated_elements(pages_text)
-
-        # Convert to chunks (one chunk per page at this stage)
-        chunks = self._pages_to_chunks(pages_text, metadata)
-
-        logger.info(
-            f"Parsed {file_path.name}: {metadata.num_pages} pages, "
-            f"{len(chunks)} chunks, {sum(c.token_count for c in chunks)} tokens"
-        )
-
-        return metadata, chunks
-
-    def _validate_file(self, file_path: Path) -> None:
-        """Validate file before processing."""
-        if not file_path.exists():
-            raise ValueError(f"File not found: {file_path}")
-
-        if file_path.suffix.lower() not in self.security.allowed_extensions:
-            raise ValueError(
-                f"Unsupported file type: {file_path.suffix}. "
-                f"Allowed: {self.security.allowed_extensions}"
-            )
-
-        size_mb = file_path.stat().st_size / (1024 * 1024)
-        if size_mb > self.security.max_file_size_mb:
-            raise ValueError(
-                f"File too large: {size_mb:.1f}MB. "
-                f"Max: {self.security.max_file_size_mb}MB"
-            )
-
-    def _extract_metadata(self, file_path: Path, reader: PdfReader) -> DocumentMetadata:
-        """Extract document metadata from PDF."""
-        info = reader.metadata or {}
-        num_pages = len(reader.pages)
-
-        if num_pages > self.security.max_pages_per_document:
-            logger.warning(
-                f"Document {file_path.name} has {num_pages} pages "
-                f"(max: {self.security.max_pages_per_document})"
-            )
-
-        # Compute content hash for dedup
-        content_hash = self._compute_content_hash(reader)
-
-        return DocumentMetadata(
-            filename=file_path.name,
-            file_path=str(file_path),
-            file_size_bytes=file_path.stat().st_size,
-            num_pages=num_pages,
-            title=info.get("/Title", None) if isinstance(info, dict) else None,
-            author=info.get("/Author", None) if isinstance(info, dict) else None,
-            content_hash=content_hash,
-        )
-
-    def _compute_content_hash(self, reader: PdfReader) -> str:
-        """Compute SHA-256 hash of document content for deduplication."""
-        hasher = hashlib.sha256()
-        for page in reader.pages[:10]:  # hash first 10 pages for speed
-            text = page.extract_text() or ""
-            hasher.update(text.encode("utf-8"))
-        return hasher.hexdigest()[:16]
-
-    def _extract_page_texts(self, reader: PdfReader, num_pages: int) -> list[dict]:
-        """Extract text from each page with page numbers."""
-        pages = []
-        for i, page in enumerate(reader.pages):
-            text = page.extract_text() or ""
-            pages.append({
-                "page_number": i,
-                "text": text,
-                "char_count": len(text),
-            })
-        return pages
-
-    def _remove_repeated_elements(self, pages: list[dict]) -> list[dict]:
-        """
-        Detect and remove repeated headers/footers.
-
-        Strategy: If a line appears identically in >50% of pages,
-        it's likely a header or footer. Remove it.
-        """
-        if len(pages) < 3:
-            return pages  # too few pages for reliable detection
-
-        # Count line frequencies across pages
-        line_counts: dict[str, int] = {}
-        for page in pages:
-            lines = page["text"].split("\\n")
-            # Check first 2 and last 2 lines (typical header/footer positions)
-            candidates = lines[:2] + lines[-2:]
-            for line in candidates:
-                stripped = line.strip()
-                if len(stripped) > 3:  # ignore very short lines
-                    line_counts[stripped] = line_counts.get(stripped, 0) + 1
-
-        # Lines appearing in >50% of pages are headers/footers
-        threshold = len(pages) * 0.5
-        repeated = {line for line, count in line_counts.items() if count > threshold}
-
-        if not repeated:
-            return pages
-
-        # Remove repeated lines from page text
-        for page in pages:
-            lines = page["text"].split("\\n")
-            filtered = [l for l in lines if l.strip() not in repeated]
-            page["text"] = "\\n".join(filtered)
-
-        logger.debug(f"Removed {len(repeated)} repeated header/footer lines")
-        return pages
-
-    def _pages_to_chunks(
-        self, pages: list[dict], metadata: DocumentMetadata
-    ) -> list[TextChunk]:
-        """Convert page texts to TextChunk objects."""
-        chunks = []
-        for page in pages:
-            text = page["text"].strip()
-            if not text:
-                continue
-
-            # Estimate token count (rough: chars / 4)
-            token_count = len(text) // 4
-
-            chunks.append(TextChunk(
-                document_id=metadata.document_id,
-                filename=metadata.filename,
-                page_number=page["page_number"],
-                content=text,
-                char_offset=0,
-                token_count=token_count,
-                metadata={
-                    "source": metadata.file_path,
-                    "total_pages": metadata.num_pages,
-                },
-            ))
-
-        return chunks
-`
-  },
-
-  // ─── CHUNKING ──────────────────────────────────────────
-  {
-    path: "src/chunking/chunker.py",
-    language: "python",
-    description: "Multiple chunking strategies with configurable parameters.",
-    phase: "Phase 4",
-    code: `"""
-src/chunking/chunker.py — Configurable chunking strategies.
-
-Implements four strategies:
-1. Fixed-size: Simple character/token-based splitting
-2. Sentence-based: Split at sentence boundaries
-3. Recursive: LangChain-style recursive character splitting
-4. Structure-aware: Split at section/heading boundaries
-
-Each strategy preserves metadata and produces traceable chunks.
+This is experimentally validated in EXP-06 (adaptive vs fixed hybrid).
 """
 
 import re
 import logging
-from typing import Protocol, Optional
-from src.core.models import TextChunk
-from src.core.config import config, ChunkingConfig
-
-logger = logging.getLogger(__name__)
-
-
-class Chunker(Protocol):
-    """Interface for chunking strategies."""
-    def chunk(self, pages: list[TextChunk], cfg: ChunkingConfig) -> list[TextChunk]:
-        ...
-
-
-class FixedSizeChunker:
-    """
-    Fixed-size chunking: split every N characters with overlap.
-
-    Pros: Simple, predictable chunk sizes.
-    Cons: May split mid-sentence.
-    """
-
-    def chunk(self, pages: list[TextChunk], cfg: ChunkingConfig) -> list[TextChunk]:
-        results = []
-        char_size = cfg.chunk_size * 4  # approximate tokens→chars
-        char_overlap = cfg.chunk_overlap * 4
-
-        for page in pages:
-            text = page.content
-            start = 0
-            while start < len(text):
-                end = start + char_size
-                chunk_text = text[start:end]
-
-                if len(chunk_text.strip()) < cfg.min_chunk_size * 4:
-                    break
-
-                results.append(TextChunk(
-                    document_id=page.document_id,
-                    filename=page.filename,
-                    page_number=page.page_number,
-                    content=chunk_text.strip(),
-                    char_offset=page.char_offset + start,
-                    token_count=len(chunk_text) // 4,
-                    metadata={**page.metadata, "chunk_strategy": "fixed"},
-                ))
-                start = end - char_overlap
-
-        return results
-
-
-class SentenceChunker:
-    """
-    Sentence-based chunking: group sentences until chunk is full.
-
-    Pros: Never splits mid-sentence.
-    Cons: Variable chunk sizes.
-    """
-
-    SENTENCE_PATTERN = re.compile(r'(?<=[.!?])\\s+')
-
-    def chunk(self, pages: list[TextChunk], cfg: ChunkingConfig) -> list[TextChunk]:
-        results = []
-        char_size = cfg.chunk_size * 4
-
-        for page in pages:
-            sentences = self.SENTENCE_PATTERN.split(page.content)
-            current_chunk = []
-            current_length = 0
-
-            for sentence in sentences:
-                sentence_len = len(sentence)
-
-                if current_length + sentence_len > char_size and current_chunk:
-                    # Flush current chunk
-                    chunk_text = " ".join(current_chunk)
-                    results.append(self._make_chunk(page, chunk_text, cfg))
-                    # Keep overlap sentences
-                    overlap_text = " ".join(current_chunk)
-                    overlap_chars = cfg.chunk_overlap * 4
-                    while len(overlap_text) > overlap_chars and current_chunk:
-                        current_chunk.pop(0)
-                        overlap_text = " ".join(current_chunk)
-                    current_length = len(overlap_text)
-
-                current_chunk.append(sentence)
-                current_length += sentence_len
-
-            # Flush remaining
-            if current_chunk:
-                chunk_text = " ".join(current_chunk)
-                if len(chunk_text) >= cfg.min_chunk_size * 4:
-                    results.append(self._make_chunk(page, chunk_text, cfg))
-
-        return results
-
-    def _make_chunk(self, page: TextChunk, text: str, cfg: ChunkingConfig) -> TextChunk:
-        return TextChunk(
-            document_id=page.document_id,
-            filename=page.filename,
-            page_number=page.page_number,
-            content=text.strip(),
-            char_offset=page.char_offset,
-            token_count=len(text) // 4,
-            metadata={**page.metadata, "chunk_strategy": "sentence"},
-        )
-
-
-class RecursiveChunker:
-    """
-    Recursive character splitting (LangChain-style).
-
-    Tries separators in order: paragraphs → lines → sentences → words.
-    Only splits at a lower level if the current level produces chunks
-    that are still too large.
-    """
-
-    def chunk(self, pages: list[TextChunk], cfg: ChunkingConfig) -> list[TextChunk]:
-        results = []
-        char_size = cfg.chunk_size * 4
-        char_overlap = cfg.chunk_overlap * 4
-
-        for page in pages:
-            chunks = self._recursive_split(
-                page.content, cfg.separators, char_size, char_overlap
-            )
-            for chunk_text in chunks:
-                if len(chunk_text.strip()) < cfg.min_chunk_size * 4:
-                    continue
-                results.append(TextChunk(
-                    document_id=page.document_id,
-                    filename=page.filename,
-                    page_number=page.page_number,
-                    content=chunk_text.strip(),
-                    char_offset=page.char_offset,
-                    token_count=len(chunk_text) // 4,
-                    metadata={**page.metadata, "chunk_strategy": "recursive"},
-                ))
-
-        return results
-
-    def _recursive_split(
-        self, text: str, separators: list[str], size: int, overlap: int
-    ) -> list[str]:
-        """Recursively split text using separators."""
-        if len(text) <= size:
-            return [text] if text.strip() else []
-
-        # Find the best separator
-        sep = separators[-1]  # default: split on spaces
-        for s in separators:
-            if s in text:
-                sep = s
-                break
-
-        parts = text.split(sep)
-        chunks = []
-        current = ""
-
-        for part in parts:
-            candidate = current + sep + part if current else part
-            if len(candidate) > size and current:
-                chunks.append(current)
-                # Compute overlap
-                if overlap > 0:
-                    overlap_text = current[-overlap:] if len(current) > overlap else current
-                    current = overlap_text + sep + part
-                else:
-                    current = part
-            else:
-                current = candidate
-
-        if current.strip():
-            chunks.append(current)
-
-        return chunks
-
-
-class StructureAwareChunker:
-    """
-    Structure-aware chunking: detect headings and split at section boundaries.
-
-    Uses heuristics to identify headings:
-    - Lines that are significantly shorter than surrounding text
-    - Lines with title-case patterns
-    - Lines followed by blank lines
-
-    Pros: Preserves document structure, chunks are topically coherent.
-    Cons: Heuristic-based, may miss some structures.
-    """
-
-    HEADING_PATTERN = re.compile(
-        r'^(\\d+\\.?\\s+[A-Z].{2,60}$|'     # "1. Introduction"
-        r'^[A-Z][A-Za-z\\s]{2,50}$|'          # "INTRODUCTION" or "Introduction"
-        r'^Chapter\\s+\\d+)'                   # "Chapter 3"
-    )
-
-    def chunk(self, pages: list[TextChunk], cfg: ChunkingConfig) -> list[TextChunk]:
-        results = []
-        char_size = cfg.chunk_size * 4
-
-        for page in pages:
-            sections = self._detect_sections(page.content)
-
-            for section_name, section_text in sections:
-                # If section is too large, sub-chunk it
-                if len(section_text) > char_size:
-                    sub_chunker = RecursiveChunker()
-                    sub_page = TextChunk(
-                        document_id=page.document_id,
-                        filename=page.filename,
-                        page_number=page.page_number,
-                        content=section_text,
-                    )
-                    sub_chunks = sub_chunker.chunk([sub_page], cfg)
-                    for sc in sub_chunks:
-                        sc.section = section_name
-                        sc.metadata["chunk_strategy"] = "structure"
-                    results.extend(sub_chunks)
-                elif len(section_text.strip()) >= cfg.min_chunk_size * 4:
-                    results.append(TextChunk(
-                        document_id=page.document_id,
-                        filename=page.filename,
-                        page_number=page.page_number,
-                        section=section_name,
-                        content=section_text.strip(),
-                        char_offset=page.char_offset,
-                        token_count=len(section_text) // 4,
-                        metadata={**page.metadata, "chunk_strategy": "structure"},
-                    ))
-
-        return results
-
-    def _detect_sections(self, text: str) -> list[tuple[str, str]]:
-        """Detect section boundaries in text."""
-        lines = text.split("\\n")
-        sections = []
-        current_section = "preamble"
-        current_text = []
-
-        for line in lines:
-            if self.HEADING_PATTERN.match(line.strip()):
-                # Save current section
-                if current_text:
-                    sections.append((current_section, "\\n".join(current_text)))
-                current_section = line.strip()
-                current_text = []
-            else:
-                current_text.append(line)
-
-        if current_text:
-            sections.append((current_section, "\\n".join(current_text)))
-
-        return sections
-
-
-# ──────────────────────────────────────────────
-# Factory
-# ──────────────────────────────────────────────
-CHUNKERS = {
-    "fixed": FixedSizeChunker,
-    "sentence": SentenceChunker,
-    "recursive": RecursiveChunker,
-    "structure": StructureAwareChunker,
-}
-
-
-def get_chunker(strategy: str) -> Chunker:
-    """Get a chunker by strategy name."""
-    if strategy not in CHUNKERS:
-        raise ValueError(f"Unknown chunking strategy: {strategy}. Options: {list(CHUNKERS.keys())}")
-    return CHUNKERS[strategy]()
-`
-  },
-
-  // ─── EMBEDDINGS ────────────────────────────────────────
-  {
-    path: "src/embeddings/embedder.py",
-    language: "python",
-    description: "Configurable embedding generation with local and API providers.",
-    phase: "Phase 5",
-    code: `"""
-src/embeddings/embedder.py — Embedding generation.
-
-Supports:
-- Local: sentence-transformers (free, offline)
-- OpenAI: text-embedding-3-small (API, higher quality)
-
-Uses batching for efficiency and caching to avoid re-embedding
-identical content.
-"""
-
-import hashlib
-import logging
-import time
-from typing import Protocol
-from functools import lru_cache
-
-from src.core.config import config
-
-logger = logging.getLogger(__name__)
-
-
-class Embedder(Protocol):
-    """Interface for embedding providers."""
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        ...
-    def embed_query(self, text: str) -> list[float]:
-        ...
-
-
-class LocalEmbedder:
-    """
-    Local embedding using sentence-transformers.
-
-    Model: all-MiniLM-L6-v2 (384 dimensions)
-    Speed: ~50 chunks/sec on CPU
-    Cost: $0
-
-    Design: Model is loaded once and cached. Batching improves throughput.
-    """
-
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
-        from sentence_transformers import SentenceTransformer
-        logger.info(f"Loading local embedding model: {model_name}")
-        self.model = SentenceTransformer(model_name)
-        self.dimension = self.model.get_sentence_embedding_dimension()
-        logger.info(f"Model loaded. Dimension: {self.dimension}")
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts."""
-        start = time.time()
-        embeddings = self.model.encode(
-            texts,
-            batch_size=config.embedding.batch_size,
-            normalize_embeddings=config.embedding.normalize,
-            show_progress_bar=len(texts) > 100,
-        )
-        elapsed = time.time() - start
-        logger.debug(f"Embedded {len(texts)} texts in {elapsed:.2f}s")
-        return embeddings.tolist()
-
-    def embed_query(self, text: str) -> list[float]:
-        """Embed a single query text."""
-        embedding = self.model.encode(
-            [text],
-            normalize_embeddings=config.embedding.normalize,
-        )
-        return embedding[0].tolist()
-
-
-class OpenAIEmbedder:
-    """
-    OpenAI embedding using text-embedding-3-small.
-
-    Model: text-embedding-3-small (1536 dimensions)
-    Speed: ~1000 chunks/sec (API-limited)
-    Cost: ~$0.02 per 1M tokens
-    """
-
-    def __init__(self, model: str = "text-embedding-3-small"):
-        from langchain_openai import OpenAIEmbeddings
-        self.embeddings = OpenAIEmbeddings(model=model)
-        self.dimension = 1536
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts."""
-        return self.embeddings.embed_documents(texts)
-
-    def embed_query(self, text: str) -> list[float]:
-        """Embed a single query."""
-        return self.embeddings.embed_query(text)
-
-
-# ──────────────────────────────────────────────
-# Factory
-# ──────────────────────────────────────────────
-_embedder_cache: dict[str, Embedder] = {}
-
-
-def get_embedder() -> Embedder:
-    """Get or create the configured embedder (cached)."""
-    provider = config.embedding.provider
-    if provider not in _embedder_cache:
-        if provider == "openai":
-            _embedder_cache[provider] = OpenAIEmbedder()
-        else:
-            _embedder_cache[provider] = LocalEmbedder(config.embedding.model_name)
-    return _embedder_cache[provider]
-`
-  },
-
-  // ─── INDEXING ──────────────────────────────────────────
-  {
-    path: "src/indexing/vector_store.py",
-    language: "python",
-    description: "ChromaDB vector store with persistent storage.",
-    phase: "Phase 5",
-    code: `"""
-src/indexing/vector_store.py — Vector index using ChromaDB.
-
-ChromaDB provides:
-- Persistent storage (survives restarts)
-- Metadata filtering
-- Built-in similarity search
-- No separate server required
-"""
-
-import logging
 from typing import Optional
-
-import chromadb
-from chromadb.config import Settings
-
-from src.core.config import config
-from src.core.models import TextChunk, EmbeddedChunk
+from src.core.models import QueryType
 
 logger = logging.getLogger(__name__)
 
 
-class VectorIndex:
+class QueryAnalyzer:
     """
-    ChromaDB-backed vector index.
-
-    Stores embeddings with full metadata for retrieval and citation.
-    Persists to disk so re-running doesn't require re-embedding.
-    """
-
-    COLLECTION_NAME = "rag_documents"
-
-    def __init__(self):
-        self.client = chromadb.PersistentClient(
-            path=str(config.CHROMA_DIR),
-            settings=Settings(anonymized_telemetry=False),
-        )
-        self.collection = self.client.get_or_create_collection(
-            name=self.COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},  # cosine similarity
-        )
-        logger.info(
-            f"Vector index initialized. "
-            f"Collection '{self.COLLECTION_NAME}' has {self.collection.count()} vectors."
-        )
-
-    def add_chunks(self, chunks: list[EmbeddedChunk]) -> None:
-        """Add embedded chunks to the index."""
-        if not chunks:
-            return
-
-        ids = [c.chunk_id for c in chunks]
-        embeddings = [c.embedding for c in chunks]
-        documents = [c.content for c in chunks]
-        metadatas = [
-            {
-                "document_id": c.document_id,
-                "filename": c.filename,
-                "page_number": c.page_number,
-                "section": c.section or "",
-                "token_count": c.token_count,
-                "char_offset": c.char_offset,
-            }
-            for c in chunks
-        ]
-
-        # Upsert to handle re-ingestion
-        self.collection.upsert(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas,
-        )
-        logger.info(f"Added {len(chunks)} chunks to vector index")
-
-    def search(
-        self,
-        query_embedding: list[float],
-        top_k: int = 50,
-        filter_metadata: Optional[dict] = None,
-    ) -> list[dict]:
-        """
-        Search for similar chunks.
-
-        Returns list of dicts with: id, content, metadata, distance
-        """
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=min(top_k, self.collection.count()),
-            where=filter_metadata,
-            include=["documents", "metadatas", "distances"],
-        )
-
-        formatted = []
-        if results["ids"] and results["ids"][0]:
-            for i, doc_id in enumerate(results["ids"][0]):
-                formatted.append({
-                    "chunk_id": doc_id,
-                    "content": results["documents"][0][i],
-                    "metadata": results["metadatas"][0][i],
-                    "distance": results["distances"][0][i],
-                    "score": 1 - results["distances"][0][i],  # cosine distance → similarity
-                })
-
-        return formatted
-
-    def count(self) -> int:
-        """Return number of vectors in the index."""
-        return self.collection.count()
-
-    def delete_by_document(self, document_id: str) -> None:
-        """Remove all chunks for a document."""
-        self.collection.delete(where={"document_id": document_id})
-        logger.info(f"Deleted chunks for document {document_id}")
-
-    def clear(self) -> None:
-        """Clear the entire index."""
-        self.client.delete_collection(self.COLLECTION_NAME)
-        self.collection = self.client.create_collection(
-            name=self.COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
-        logger.info("Vector index cleared")
-`
-  },
-
-  {
-    path: "src/indexing/bm25_index.py",
-    language: "python",
-    description: "BM25 lexical index for keyword-based retrieval.",
-    phase: "Phase 5",
-    code: `"""
-src/indexing/bm25_index.py — BM25 lexical index.
-
-BM25 provides strong keyword matching that complements dense retrieval.
-Where dense retrieval finds semantically similar content, BM25 finds
-content with exact term matches — critical for proper nouns, technical
-terms, and specific references.
-
-Uses rank_bm25 library for efficient scoring.
-"""
-
-import json
-import logging
-import pickle
-from pathlib import Path
-from typing import Optional
-
-from rank_bm25 import BM25Okapi
-
-from src.core.config import config
-from src.core.models import TextChunk
-
-logger = logging.getLogger(__name__)
-
-
-class BM25Index:
-    """
-    BM25 lexical index for keyword-based retrieval.
+    Classifies queries to inform adaptive retrieval strategy.
 
     Design decisions:
-    - Uses Okapi BM25 (standard variant, well-tested)
-    - Tokenizes on whitespace + punctuation (simple but effective)
-    - Persists to disk for fast reload
-    - Stores chunk references for metadata retrieval
+    - Uses rule-based classification (fast, deterministic, debuggable)
+    - NOT using an LLM for classification (adds latency, cost, noise)
+    - Rules are derived from IR literature and empirical observation
+    - Falls back to UNKNOWN (balanced hybrid) when uncertain
     """
 
-    def __init__(self):
-        self.index_dir = config.BM25_INDEX_DIR
-        self.bm25: Optional[BM25Okapi] = None
-        self.chunks: list[dict] = []  # parallel to BM25 corpus
-        self._load_if_exists()
+    # Patterns indicating exact/lexical queries
+    EXACT_PATTERNS = [
+        r'\\b\\d{4}\\b',                    # years (2024, 2023)
+        r'\\$[\\d,.]+',                      # dollar amounts
+        r'\\b\\d+[%]\\b',                    # percentages
+        r'\\bQ[1-4]\\b',                     # quarters
+        r'\\b(page|chapter|section)\\s+\\d+', # specific locations
+        r'\\b(who|what year|how many|how much)\\b',  # factoid questions
+    ]
 
-    def _load_if_exists(self) -> None:
-        """Load existing index from disk if available."""
-        index_file = self.index_dir / "bm25.pkl"
-        meta_file = self.index_dir / "bm25_meta.json"
+    # Patterns indicating conceptual queries
+    CONCEPTUAL_PATTERNS = [
+        r'\\b(how does|why does|explain|describe|what is)\\b',
+        r'\\b(relationship|impact|effect|influence)\\b',
+        r'\\b(methodology|approach|framework|theory)\\b',
+    ]
 
-        if index_file.exists() and meta_file.exists():
-            try:
-                with open(index_file, "rb") as f:
-                    self.bm25 = pickle.load(f)
-                with open(meta_file, "r") as f:
-                    self.chunks = json.load(f)
-                logger.info(f"Loaded BM25 index with {len(self.chunks)} chunks")
-            except Exception as e:
-                logger.warning(f"Failed to load BM25 index: {e}. Will rebuild.")
-                self.bm25 = None
-                self.chunks = []
+    # Patterns indicating multi-hop
+    MULTI_HOP_PATTERNS = [
+        r'\\b(compare|versus|vs\\.?|difference)\\b',
+        r'\\b(both|each|respectively)\\b',
+        r'\\b(changed|improved|evolved)\\b.*\\b(between|from.*to)\\b',
+    ]
 
-    def build(self, chunks: list[TextChunk]) -> None:
-        """Build BM25 index from chunks."""
-        logger.info(f"Building BM25 index from {len(chunks)} chunks...")
+    # Patterns indicating ambiguity
+    AMBIGUOUS_PATTERNS = [
+        r'\\b(it|they|this|that|the)\\b.*\\b(mean|refer|about)\\b',
+        r'\\?$.*\\bor\\b',  # "X or Y?" questions
+    ]
 
-        # Tokenize
-        corpus = [self._tokenize(c.content) for c in chunks]
-
-        # Build BM25
-        self.bm25 = BM25Okapi(corpus)
-
-        # Store chunk metadata (not full content — saved in vector store)
-        self.chunks = [
-            {
-                "chunk_id": c.chunk_id,
-                "document_id": c.document_id,
-                "filename": c.filename,
-                "page_number": c.page_number,
-                "section": c.section or "",
-                "content": c.content,  # needed for BM25 result text
-            }
-            for c in chunks
-        ]
-
-        # Persist
-        self._save()
-        logger.info(f"BM25 index built and saved: {len(self.chunks)} chunks")
-
-    def search(self, query: str, top_k: int = 50) -> list[dict]:
+    def classify(self, query: str) -> QueryType:
         """
-        Search BM25 index.
+        Classify a query into a type for adaptive retrieval.
 
-        Returns list of dicts with: chunk_id, content, metadata, score
+        Returns QueryType enum value.
+        Falls back to UNKNOWN if no strong signal detected.
         """
-        if self.bm25 is None:
-            logger.warning("BM25 index not built. Returning empty results.")
-            return []
+        query_lower = query.lower()
+        scores = {
+            QueryType.EXACT: 0,
+            QueryType.CONCEPTUAL: 0,
+            QueryType.MULTI_HOP: 0,
+            QueryType.AMBIGUOUS: 0,
+        }
 
-        tokens = self._tokenize(query)
-        scores = self.bm25.get_scores(tokens)
+        # Score each type based on pattern matches
+        for pattern in self.EXACT_PATTERNS:
+            if re.search(pattern, query_lower):
+                scores[QueryType.EXACT] += 2
 
-        # Get top-k indices
-        top_indices = scores.argsort()[::-1][:top_k]
+        for pattern in self.CONCEPTUAL_PATTERNS:
+            if re.search(pattern, query_lower):
+                scores[QueryType.CONCEPTUAL] += 2
 
-        results = []
-        for rank, idx in enumerate(top_indices):
-            if scores[idx] <= 0:
-                break
-            chunk = self.chunks[idx]
-            results.append({
-                "chunk_id": chunk["chunk_id"],
-                "content": chunk["content"],
-                "metadata": {
-                    "document_id": chunk["document_id"],
-                    "filename": chunk["filename"],
-                    "page_number": chunk["page_number"],
-                    "section": chunk["section"],
-                },
-                "score": float(scores[idx]),
-                "rank": rank,
-            })
+        for pattern in self.MULTI_HOP_PATTERNS:
+            if re.search(pattern, query_lower):
+                scores[QueryType.MULTI_HOP] += 2
 
-        return results
+        for pattern in self.AMBIGUOUS_PATTERNS:
+            if re.search(pattern, query_lower):
+                scores[QueryType.AMBIGUOUS] += 2
 
-    def _tokenize(self, text: str) -> list[str]:
-        """Simple tokenization: lowercase + split on non-alphanumeric."""
-        import re
-        return re.findall(r'\\w+', text.lower())
+        # Check for numerical content (strong exact signal)
+        if re.search(r'\\b\\d+\\.?\\d*\\b', query):
+            scores[QueryType.EXACT] += 1
 
-    def _save(self) -> None:
-        """Persist index to disk."""
-        self.index_dir.mkdir(parents=True, exist_ok=True)
+        # Check for proper nouns (likely exact lookup)
+        if re.search(r'\\b[A-Z][a-z]+\\s+[A-Z][a-z]+\\b', query):
+            scores[QueryType.EXACT] += 1
 
-        with open(self.index_dir / "bm25.pkl", "wb") as f:
-            pickle.dump(self.bm25, f)
+        # Determine winner
+        max_score = max(scores.values())
+        if max_score == 0:
+            return QueryType.UNKNOWN
 
-        with open(self.index_dir / "bm25_meta.json", "w") as f:
-            json.dump(self.chunks, f)
+        # Check for ties — if multiple types score equally, use hybrid
+        top_types = [t for t, s in scores.items() if s == max_score]
+        if len(top_types) > 1:
+            return QueryType.UNKNOWN  # ambiguous → balanced hybrid
 
-    def count(self) -> int:
-        return len(self.chunks)
+        winner = max(scores, key=scores.get)
+        logger.debug(f"Query classified as {winner.value} (scores: {scores})")
+        return winner
+
+    def get_retrieval_weights(self, query_type: QueryType) -> dict[str, float]:
+        """
+        Map query type to optimal dense/BM25 weight ratio.
+
+        These weights are starting points. They should be tuned
+        experimentally (see EXP-06).
+        """
+        weight_map = {
+            QueryType.EXACT: {"dense": 0.3, "bm25": 0.7},      # lexical-heavy
+            QueryType.CONCEPTUAL: {"dense": 0.8, "bm25": 0.2},  # semantic-heavy
+            QueryType.TECHNICAL: {"dense": 0.5, "bm25": 0.5},   # balanced
+            QueryType.AMBIGUOUS: {"dense": 0.5, "bm25": 0.5},   # balanced
+            QueryType.MULTI_HOP: {"dense": 0.6, "bm25": 0.4},   # slightly semantic
+            QueryType.COMPARISON: {"dense": 0.5, "bm25": 0.5},  # balanced
+            QueryType.UNKNOWN: {"dense": 0.5, "bm25": 0.5},     # balanced default
+        }
+        return weight_map.get(query_type, weight_map[QueryType.UNKNOWN])
+
+    def get_candidate_multiplier(self, query_type: QueryType) -> int:
+        """
+        How many candidates to retrieve based on query type.
+
+        Multi-hop and ambiguous queries need broader retrieval.
+        Exact queries can be more precise.
+        """
+        multipliers = {
+            QueryType.EXACT: 1,
+            QueryType.CONCEPTUAL: 1,
+            QueryType.TECHNICAL: 1,
+            QueryType.AMBIGUOUS: 2,      # retrieve more for ambiguous
+            QueryType.MULTI_HOP: 2,      # need broader coverage
+            QueryType.COMPARISON: 2,     # multi-document
+            QueryType.UNKNOWN: 1,
+        }
+        return multipliers.get(query_type, 1)
 `
   },
 
-  // ─── RETRIEVAL ─────────────────────────────────────────
   {
-    path: "src/retrieval/hybrid_retriever.py",
+    path: "src/adaptive/adaptive_retriever.py",
     language: "python",
-    description: "Hybrid retrieval with RRF fusion, reranking, and citation tracking.",
-    phase: "Phase 5-6",
+    description: "Adaptive hybrid retrieval — dynamically adjusts weights and candidate counts based on query analysis.",
+    phase: "Phase 9",
+    category: "Adaptive",
     code: `"""
-src/retrieval/hybrid_retriever.py — Hybrid retrieval pipeline.
+src/adaptive/adaptive_retriever.py — Adaptive hybrid retrieval.
 
-Pipeline:
-1. Dense retrieval (semantic similarity)
-2. BM25 retrieval (lexical matching)
-3. Reciprocal Rank Fusion (combine both)
-4. Reranking (cross-encoder for precision)
-5. Return top-K with full metadata
+This is the core research component. Instead of using fixed weights
+(dense=0.5, bm25=0.5), the system:
 
-This is the core retrieval system. Each stage is independently
-configurable and measurable for ablation studies.
+1. Classifies the query type
+2. Adjusts dense/BM25 weights based on query characteristics
+3. Adjusts candidate count based on query complexity
+4. Records the adaptive decisions for analysis
+
+RESEARCH QUESTION: Does adaptive weighting improve retrieval quality
+over fixed hybrid retrieval?
+
+This is tested in EXP-06 (adaptive) vs EXP-03/04/05 (fixed).
 """
 
 import logging
 import time
 from typing import Optional
-from collections import defaultdict
 
 from src.core.config import config
 from src.core.models import (
-    RetrievalResult, RetrievalOutput, TextChunk,
+    QueryType, RetrievalOutput, RetrievalResult, TextChunk,
 )
+from src.adaptive.query_analyzer import QueryAnalyzer
 from src.indexing.vector_store import VectorIndex
 from src.indexing.bm25_index import BM25Index
 from src.embeddings.embedder import get_embedder
@@ -1312,55 +595,78 @@ from src.embeddings.embedder import get_embedder
 logger = logging.getLogger(__name__)
 
 
-class HybridRetriever:
+class AdaptiveRetriever:
     """
-    Hybrid retrieval combining dense + BM25 + reranking.
+    Retrieval system that adapts its strategy per query.
 
-    The pipeline is fully configurable via RetrievalConfig.
-    Each stage can be disabled for ablation studies.
+    Pipeline:
+    1. Analyze query → determine type
+    2. Compute adaptive weights
+    3. Retrieve with adjusted parameters
+    4. Fuse with adaptive weights
+    5. Rerank
+    6. Return results with full metadata
+
+    Every adaptive decision is logged for experimental analysis.
     """
 
     def __init__(self):
         self.vector_index = VectorIndex()
         self.bm25_index = BM25Index()
         self.embedder = get_embedder()
+        self.query_analyzer = QueryAnalyzer()
         self.cfg = config.retrieval
         self._reranker = None
 
     def retrieve(self, query: str) -> RetrievalOutput:
         """
-        Full retrieval pipeline.
+        Full adaptive retrieval pipeline.
 
-        Returns RetrievalOutput with ranked candidates and timing info.
+        Returns RetrievalOutput with query_type and adaptive_weights
+        populated for experimental analysis.
         """
         start_time = time.time()
         method_details = {}
 
-        # Stage 1: Dense retrieval
-        dense_results = self._dense_retrieve(query)
-        method_details["dense"] = {"candidates": len(dense_results)}
+        # Step 1: Classify query
+        query_type = self.query_analyzer.classify(query)
+        method_details["query_analysis"] = {"type": query_type.value}
 
-        # Stage 2: BM25 retrieval
-        bm25_results = self._bm25_retrieve(query)
-        method_details["bm25"] = {"candidates": len(bm25_results)}
-
-        # Stage 3: Fusion
-        if self.cfg.fusion_method == "rrf":
-            fused = self._reciprocal_rank_fusion(dense_results, bm25_results)
-        elif self.cfg.fusion_method == "weighted":
-            fused = self._weighted_fusion(dense_results, bm25_results)
+        # Step 2: Get adaptive parameters
+        if self.cfg.adaptive_enabled:
+            weights = self.query_analyzer.get_retrieval_weights(query_type)
+            multiplier = self.query_analyzer.get_candidate_multiplier(query_type)
         else:
-            fused = self._interleave_fusion(dense_results, bm25_results)
+            # Fallback to fixed weights
+            weights = {"dense": self.cfg.dense_weight, "bm25": self.cfg.bm25_weight}
+            multiplier = 1
+
+        method_details["adaptive"] = {
+            "enabled": self.cfg.adaptive_enabled,
+            "weights": weights,
+            "candidate_multiplier": multiplier,
+        }
+
+        # Step 3: Retrieve with adjusted parameters
+        dense_k = int(self.cfg.dense_top_k * multiplier)
+        bm25_k = int(self.cfg.bm25_top_k * multiplier)
+
+        dense_results = self._dense_retrieve(query, top_k=dense_k)
+        bm25_results = self._bm25_retrieve(query, top_k=bm25_k)
+
+        method_details["dense"] = {"candidates": len(dense_results), "k": dense_k}
+        method_details["bm25"] = {"candidates": len(bm25_results), "k": bm25_k}
+
+        # Step 4: Fuse with adaptive weights
+        fused = self._weighted_fusion(dense_results, bm25_results, weights)
+        fused = fused[:self.cfg.post_fusion_top_k]
 
         method_details["fusion"] = {
-            "method": self.cfg.fusion_method,
+            "method": "weighted_adaptive",
             "candidates_after_fusion": len(fused),
         }
 
-        # Truncate to post-fusion top-K
-        fused = fused[:self.cfg.post_fusion_top_k]
-
-        # Stage 4: Reranking
+        # Step 5: Rerank
         if self.cfg.rerank_enabled and fused:
             fused = self._rerank(query, fused)
             method_details["reranking"] = {
@@ -1368,10 +674,8 @@ class HybridRetriever:
                 "candidates_after_rerank": len(fused),
             }
 
-        # Final truncation
+        # Step 6: Build output
         final = fused[:self.cfg.rerank_top_k]
-
-        # Build output
         results = []
         for rank, item in enumerate(final):
             chunk = TextChunk(
@@ -1386,7 +690,7 @@ class HybridRetriever:
             results.append(RetrievalResult(
                 chunk=chunk,
                 score=item["score"],
-                retrieval_method="hybrid+rerank" if self.cfg.rerank_enabled else "hybrid",
+                retrieval_method="adaptive_hybrid+rerank",
                 rank=rank,
             ))
 
@@ -1398,727 +702,1117 @@ class HybridRetriever:
             total_candidates=len(results),
             retrieval_latency_ms=elapsed,
             method_details=method_details,
+            query_type=query_type,
+            adaptive_weights=weights,
         )
 
-    # ──────────────────────────────────────────
-    # Stage 1: Dense retrieval
-    # ──────────────────────────────────────────
-    def _dense_retrieve(self, query: str) -> list[dict]:
-        """Semantic similarity search via vector index."""
+    def _dense_retrieve(self, query: str, top_k: int) -> list[dict]:
         query_embedding = self.embedder.embed_query(query)
-        return self.vector_index.search(query_embedding, top_k=self.cfg.dense_top_k)
+        return self.vector_index.search(query_embedding, top_k=top_k)
 
-    # ──────────────────────────────────────────
-    # Stage 2: BM25 retrieval
-    # ──────────────────────────────────────────
-    def _bm25_retrieve(self, query: str) -> list[dict]:
-        """Lexical keyword search via BM25."""
-        return self.bm25_index.search(query, top_k=self.cfg.bm25_top_k)
-
-    # ──────────────────────────────────────────
-    # Stage 3: Fusion methods
-    # ──────────────────────────────────────────
-    def _reciprocal_rank_fusion(
-        self, dense: list[dict], bm25: list[dict]
-    ) -> list[dict]:
-        """
-        Reciprocal Rank Fusion (RRF).
-
-        Score = Σ 1/(k + rank_i) for each retrieval method i.
-
-        RRF is parameter-free (except k), robust to score scale
-        differences between retrievers, and well-documented in IR literature.
-
-        Reference: Cormack et al., "Reciprocal Rank Fusion outperforms
-        Condorcet and individual Rank Learning Methods" (2009).
-        """
-        k = self.cfg.rrf_k
-        scores: dict[str, float] = defaultdict(float)
-        items: dict[str, dict] = {}
-
-        for rank, item in enumerate(dense):
-            cid = item["chunk_id"]
-            scores[cid] += 1.0 / (k + rank + 1)
-            items[cid] = item
-
-        for rank, item in enumerate(bm25):
-            cid = item["chunk_id"]
-            scores[cid] += 1.0 / (k + rank + 1)
-            if cid not in items:
-                items[cid] = item
-
-        # Sort by fused score
-        sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-        results = []
-        for cid in sorted_ids:
-            item = items[cid].copy()
-            item["score"] = scores[cid]
-            results.append(item)
-
-        return results
+    def _bm25_retrieve(self, query: str, top_k: int) -> list[dict]:
+        return self.bm25_index.search(query, top_k=top_k)
 
     def _weighted_fusion(
-        self, dense: list[dict], bm25: list[dict]
+        self,
+        dense: list[dict],
+        bm25: list[dict],
+        weights: dict[str, float],
     ) -> list[dict]:
         """
-        Weighted score fusion.
+        Weighted score fusion with adaptive weights.
 
-        Requires score normalization (both scores mapped to [0,1]).
+        Unlike RRF, this uses the query-type-specific weights to
+        balance dense and BM25 contributions.
         """
+        from collections import defaultdict
         scores: dict[str, float] = defaultdict(float)
         items: dict[str, dict] = {}
 
-        # Normalize dense scores to [0,1]
+        # Normalize and weight dense scores
         max_dense = max((d["score"] for d in dense), default=1.0) or 1.0
         for item in dense:
             cid = item["chunk_id"]
-            scores[cid] += (item["score"] / max_dense) * self.cfg.dense_weight
+            scores[cid] += (item["score"] / max_dense) * weights["dense"]
             items[cid] = item
 
-        # Normalize BM25 scores to [0,1]
+        # Normalize and weight BM25 scores
         max_bm25 = max((b["score"] for b in bm25), default=1.0) or 1.0
         for item in bm25:
             cid = item["chunk_id"]
-            scores[cid] += (item["score"] / max_bm25) * self.cfg.bm25_weight
+            scores[cid] += (item["score"] / max_bm25) * weights["bm25"]
             if cid not in items:
                 items[cid] = item
 
         sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-        return [{"**items[cid], "score": scores[cid]} for cid in sorted_ids]
+        return [{**items[cid], "score": scores[cid]} for cid in sorted_ids]
 
-    def _interleave_fusion(
-        self, dense: list[dict], bm25: list[dict]
-    ) -> list[dict]:
-        """Simple interleaving: alternate between dense and BM25 results."""
-        seen = set()
-        results = []
-        max_len = max(len(dense), len(bm25))
-
-        for i in range(max_len):
-            if i < len(dense):
-                cid = dense[i]["chunk_id"]
-                if cid not in seen:
-                    seen.add(cid)
-                    results.append(dense[i])
-            if i < len(bm25):
-                cid = bm25[i]["chunk_id"]
-                if cid not in seen:
-                    seen.add(cid)
-                    results.append(bm25[i])
-
-        return results
-
-    # ──────────────────────────────────────────
-    # Stage 4: Reranking
-    # ──────────────────────────────────────────
     def _rerank(self, query: str, candidates: list[dict]) -> list[dict]:
-        """
-        Cross-encoder reranking.
-
-        Cross-encoders are more accurate than bi-encoders for
-        relevance scoring because they process query+document together.
-
-        Model: ms-marco-MiniLM (fast, good quality)
-        """
         if self._reranker is None:
             from sentence_transformers import CrossEncoder
             self._reranker = CrossEncoder(self.cfg.rerank_model)
 
-        # Build query-document pairs
         pairs = [(query, c["content"]) for c in candidates]
         rerank_scores = self._reranker.predict(pairs)
 
-        # Update scores and sort
         for i, candidate in enumerate(candidates):
             candidate["score"] = float(rerank_scores[i])
-            candidate["rerank_score"] = float(rerank_scores[i])
 
         candidates.sort(key=lambda x: x["score"], reverse=True)
         return candidates
 `
   },
 
-  // ─── GENERATION ────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // EVIDENCE SUFFICIENCY
+  // ═══════════════════════════════════════════════════════════
   {
-    path: "src/generation/generator.py",
+    path: "src/evidence/sufficiency.py",
     language: "python",
-    description: "LLM generation with abstention, citation validation, and support-level classification.",
-    phase: "Phase 7-9",
+    description: "Evidence sufficiency assessment — determines whether retrieved evidence can support a reliable answer.",
+    phase: "Phase 8",
+    category: "Evidence",
     code: `"""
-src/generation/generator.py — LLM generation with reliability features.
+src/evidence/sufficiency.py — Evidence sufficiency assessment.
 
-Features:
-- Faithful generation grounded in retrieved evidence
-- Explicit abstention when evidence is insufficient
-- Citation extraction and validation
-- Support-level classification (SUPPORTED / PARTIALLY / UNSUPPORTED / UNKNOWN)
-- Structured output parsing
+BEFORE generating an answer, we assess whether the retrieved evidence
+is sufficient. This is the key mechanism for reducing hallucination.
+
+The assessment considers:
+1. Retrieval scores (are the top results actually relevant?)
+2. Evidence agreement (do sources agree or contradict?)
+3. Evidence coverage (does the evidence address the full question?)
+4. Source quality (are sources from reliable sections?)
+5. Contradiction presence (do sources disagree?)
+
+If evidence is insufficient, the system can:
+- Retrieve more evidence (adaptive retrieval)
+- Change retrieval strategy
+- Abstain (refuse to answer)
+
+RESEARCH QUESTION: Does evidence sufficiency assessment reduce
+hallucination without excessive false refusals?
+
+Tested in EXP-11 (abstention impact).
 """
 
 import logging
-import time
 import re
 from typing import Optional
 
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema.output_parser import StrOutputParser
-
 from src.core.config import config
 from src.core.models import (
-    RetrievalOutput, GenerationOutput, Citation, SupportLevel,
+    RetrievalOutput, EvidenceAssessment, Contradiction,
+    QueryType, SupportLevel,
 )
 
 logger = logging.getLogger(__name__)
 
 
-# ──────────────────────────────────────────────
-# Prompt templates
-# ──────────────────────────────────────────────
-
-GENERATION_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", """You are a precise, evidence-based question answering assistant.
-
-You MUST follow these rules:
-1. Answer ONLY using information from the provided context.
-2. If the context does not contain enough information to answer, respond with:
-   "[ABSTAIN] I don't have enough evidence in the provided documents to answer this question."
-3. When you cite information, reference it as [CITE:chunk_N] where N is the chunk number.
-4. Do not add information beyond what the context provides.
-5. If different chunks contradict each other, note the contradiction.
-6. Be precise about numbers, dates, and names.
-
-Classify your answer's support level:
-- SUPPORTED: The answer is directly and clearly supported by the context.
-- PARTIALLY_SUPPORTED: The answer is partially supported but requires inference.
-- UNSUPPORTED: The answer goes beyond what the context provides.
-- INSUFFICIENT_EVIDENCE: Not enough context to provide a reliable answer.
-"""),
-    ("human", """Context chunks:
-{context}
-
----
-
-Question: {question}
-
----
-
-Provide your answer with citations, then on a new line state the support level:
-[SUPPORT_LEVEL: SUPPORTED|PARTIALLY_SUPPORTED|UNSUPPORTED|INSUFFICIENT_EVIDENCE]
-"""),
-])
-
-
-class Generator:
+class EvidenceSufficiencyChecker:
     """
-    LLM generator with reliability features.
+    Assesses whether retrieved evidence is sufficient to answer a query.
 
-    The generator:
-    1. Formats retrieved chunks into context
-    2. Sends to LLM with strict grounding instructions
-    3. Parses citations from the response
-    4. Validates citations against actual retrieved chunks
-    5. Classifies support level
-    6. Handles abstention
+    This is NOT a simple threshold on retrieval score. It combines
+    multiple signals to make a more robust determination.
     """
 
     def __init__(self):
-        self.llm = ChatOpenAI(
-            model=config.generation.model,
-            temperature=config.generation.temperature,
-            max_tokens=config.generation.max_tokens,
-            api_key=config.openai_api_key,
-        )
-        self.chain = GENERATION_PROMPT | self.llm | StrOutputParser()
+        self.cfg = config.evidence
 
-    def generate(self, question: str, retrieval: RetrievalOutput) -> GenerationOutput:
-        """
-        Generate an answer with citations and validation.
-
-        Pipeline:
-        1. Format context from retrieval results
-        2. Generate answer via LLM
-        3. Parse citations
-        4. Validate citations
-        5. Classify support level
-        6. Handle abstention
-        """
-        start_time = time.time()
-
-        if not retrieval.candidates:
-            return GenerationOutput(
-                answer="I don't have enough evidence in the provided documents to answer this question.",
-                support_level=SupportLevel.INSUFFICIENT_EVIDENCE,
-                confidence=0.0,
-                abstained=True,
-                generation_latency_ms=(time.time() - start_time) * 1000,
-            )
-
-        # Format context
-        context = self._format_context(retrieval)
-
-        # Generate
-        raw_response = self.chain.invoke({
-            "context": context,
-            "question": question,
-        })
-
-        elapsed = (time.time() - start_time) * 1000
-
-        # Parse response
-        answer, support_level = self._parse_response(raw_response)
-
-        # Check for abstention
-        abstained = "[ABSTAIN]" in raw_response or support_level == SupportLevel.INSUFFICIENT_EVIDENCE
-
-        # Extract and validate citations
-        citations = self._extract_citations(raw_response, retrieval)
-
-        # Compute confidence
-        confidence = self._compute_confidence(support_level, citations, retrieval)
-
-        return GenerationOutput(
-            answer=answer,
-            support_level=support_level,
-            confidence=confidence,
-            citations=citations,
-            generation_latency_ms=elapsed,
-            abstained=abstained,
-        )
-
-    def _format_context(self, retrieval: RetrievalOutput) -> str:
-        """Format retrieval results into numbered context chunks."""
-        parts = []
-        for i, result in enumerate(retrieval.candidates, 1):
-            chunk = result.chunk
-            header = (
-                f"[chunk_{i}] Source: {chunk.filename}, "
-                f"Page: {chunk.page_number + 1}"
-            )
-            if chunk.section:
-                header += f", Section: {chunk.section}"
-            parts.append(f"{header}\\n{chunk.content}")
-
-        return "\\n\\n---\\n\\n".join(parts)
-
-    def _parse_response(self, raw: str) -> tuple[str, SupportLevel]:
-        """Parse LLM response into answer and support level."""
-        # Extract support level
-        support_match = re.search(
-            r'\\[SUPPORT_LEVEL:\\s*(SUPPORTED|PARTIALLY_SUPPORTED|UNSUPPORTED|INSUFFICIENT_EVIDENCE)\\]',
-            raw
-        )
-        if support_match:
-            level = SupportLevel(support_match.group(1))
-            answer = raw[:support_match.start()].strip()
-        else:
-            level = SupportLevel.PARTIALLY_SUPPORTED  # default if not classified
-            answer = raw.strip()
-
-        # Clean up abstention markers from answer
-        answer = answer.replace("[ABSTAIN]", "").strip()
-
-        return answer, level
-
-    def _extract_citations(
-        self, raw_response: str, retrieval: RetrievalOutput
-    ) -> list[Citation]:
-        """
-        Extract citations from the response and validate them.
-
-        Citations are in format [CITE:chunk_N] where N is 1-indexed.
-        We validate each citation maps to an actual retrieved chunk.
-        """
-        citations = []
-        cite_pattern = re.compile(r'\\[CITE:chunk_(\\d+)\\]')
-        matches = cite_pattern.findall(raw_response)
-
-        seen = set()
-        for match in matches:
-            idx = int(match) - 1  # convert to 0-indexed
-            if idx < 0 or idx >= len(retrieval.candidates):
-                continue  # invalid citation — skip (don't create fake citations)
-            if idx in seen:
-                continue
-            seen.add(idx)
-
-            result = retrieval.candidates[idx]
-            chunk = result.chunk
-
-            # Find the relevant text span (heuristic: sentence containing the citation)
-            relevant_text = chunk.content[:200]  # first 200 chars as evidence
-
-            citations.append(Citation(
-                document_id=chunk.document_id,
-                filename=chunk.filename,
-                page_number=chunk.page_number,
-                section=chunk.section,
-                chunk_id=chunk.chunk_id,
-                relevant_text=relevant_text,
-                validated=True,  # validated against retrieval results
-            ))
-
-        return citations
-
-    def _compute_confidence(
+    def assess(
         self,
-        support_level: SupportLevel,
-        citations: list[Citation],
+        query: str,
         retrieval: RetrievalOutput,
-    ) -> float:
+    ) -> EvidenceAssessment:
         """
-        Compute confidence score based on multiple signals.
+        Assess evidence sufficiency.
 
-        Signals:
-        - Support level (primary)
-        - Number of citations (more = more confident)
-        - Retrieval scores (higher = more relevant evidence)
+        Returns EvidenceAssessment with:
+        - is_sufficient: boolean
+        - confidence: 0.0 to 1.0
+        - recommendation: "answer", "retrieve_more", or "abstain"
+        - contradictions: list of detected contradictions
         """
-        # Base confidence from support level
-        level_confidence = {
-            SupportLevel.SUPPORTED: 0.9,
-            SupportLevel.PARTIALLY_SUPPORTED: 0.6,
-            SupportLevel.UNSUPPORTED: 0.2,
-            SupportLevel.INSUFFICIENT_EVIDENCE: 0.0,
-        }
-        base = level_confidence.get(support_level, 0.5)
+        if not retrieval.candidates:
+            return EvidenceAssessment(
+                is_sufficient=False,
+                confidence=0.0,
+                evidence_score=0.0,
+                coverage=0.0,
+                agreement=0.0,
+                recommendation="abstain",
+                reasoning="No candidates retrieved.",
+            )
 
-        # Citation bonus (more citations = more grounded)
-        citation_factor = min(len(citations) / 3.0, 1.0) * 0.1
+        # Signal 1: Retrieval score quality
+        score_signal = self._assess_score_quality(retrieval)
 
-        # Retrieval score factor
-        if retrieval.candidates:
-            avg_score = sum(c.score for c in retrieval.candidates) / len(retrieval.candidates)
-            retrieval_factor = avg_score * 0.1
+        # Signal 2: Evidence agreement
+        agreement_signal = self._assess_agreement(retrieval)
+
+        # Signal 3: Evidence coverage
+        coverage_signal = self._assess_coverage(query, retrieval)
+
+        # Signal 4: Contradiction detection
+        contradictions = self._detect_contradictions(retrieval)
+        contradiction_signal = 1.0 - (len(contradictions) * 0.2)
+        contradiction_signal = max(0.0, min(1.0, contradiction_signal))
+
+        # Combine signals
+        evidence_score = (
+            score_signal * 0.35 +
+            agreement_signal * 0.25 +
+            coverage_signal * 0.25 +
+            contradiction_signal * 0.15
+        )
+
+        # Determine recommendation
+        if evidence_score >= self.cfg.min_evidence_score:
+            recommendation = "answer"
+            is_sufficient = True
+        elif len(retrieval.candidates) < 5:
+            recommendation = "retrieve_more"
+            is_sufficient = False
         else:
-            retrieval_factor = 0.0
+            recommendation = "abstain"
+            is_sufficient = False
 
-        return min(base + citation_factor + retrieval_factor, 1.0)
+        # Build reasoning
+        reasoning = self._build_reasoning(
+            score_signal, agreement_signal, coverage_signal,
+            contradiction_signal, contradictions, recommendation,
+        )
+
+        return EvidenceAssessment(
+            is_sufficient=is_sufficient,
+            confidence=evidence_score,
+            evidence_score=evidence_score,
+            coverage=coverage_signal,
+            agreement=agreement_signal,
+            contradictions=[c.model_dump() for c in contradictions],
+            recommendation=recommendation,
+            reasoning=reasoning,
+        )
+
+    def _assess_score_quality(self, retrieval: RetrievalOutput) -> float:
+        """
+        Assess the quality of retrieval scores.
+
+        High top-1 score + good score distribution = high quality.
+        Low scores across the board = poor retrieval.
+        """
+        if not retrieval.candidates:
+            return 0.0
+
+        top_score = retrieval.candidates[0].score
+        avg_score = sum(c.score for c in retrieval.candidates) / len(retrieval.candidates)
+
+        # Normalize: scores above 0.7 are good, below 0.3 are poor
+        top_normalized = min(top_score / 0.7, 1.0)
+        avg_normalized = min(avg_score / 0.5, 1.0)
+
+        return (top_normalized * 0.6 + avg_normalized * 0.4)
+
+    def _assess_agreement(self, retrieval: RetrievalOutput) -> float:
+        """
+        Assess whether retrieved sources agree with each other.
+
+        High agreement = sources tell a consistent story.
+        Low agreement = sources may contradict or be irrelevant.
+
+        Uses simple lexical overlap as a proxy for semantic agreement.
+        A more sophisticated approach would use NLI models.
+        """
+        if len(retrieval.candidates) < 2:
+            return 0.8  # single source, assume reasonable
+
+        contents = [c.chunk.content.lower() for c in retrieval.candidates[:5]]
+
+        # Compute pairwise overlap
+        overlaps = []
+        for i in range(len(contents)):
+            for j in range(i + 1, len(contents)):
+                words_i = set(contents[i].split())
+                words_j = set(contents[j].split())
+                if not words_i or not words_j:
+                    continue
+                overlap = len(words_i & words_j) / min(len(words_i), len(words_j))
+                overlaps.append(overlap)
+
+        if not overlaps:
+            return 0.5
+
+        avg_overlap = sum(overlaps) / len(overlaps)
+        # Map overlap to agreement score (0.1 overlap → 0.5 agreement, 0.3 → 0.9)
+        return min(avg_overlap * 3.0, 1.0)
+
+    def _assess_coverage(self, query: str, retrieval: RetrievalOutput) -> float:
+        """
+        Assess how well the evidence covers the question.
+
+        Uses keyword overlap as a simple proxy.
+        A more sophisticated approach would use query decomposition.
+        """
+        query_words = set(query.lower().split())
+        # Remove stop words
+        stop_words = {"what", "is", "the", "how", "does", "why", "when", "where", "who", "a", "an", "in", "on", "at", "to", "for", "of", "and", "or"}
+        query_words -= stop_words
+
+        if not query_words:
+            return 0.5  # can't assess
+
+        # Check how many query terms appear in retrieved content
+        all_content = " ".join(c.chunk.content.lower() for c in retrieval.candidates)
+        content_words = set(all_content.split())
+
+        coverage = len(query_words & content_words) / len(query_words)
+        return min(coverage * 1.5, 1.0)  # slight boost for partial coverage
+
+    def _detect_contradictions(self, retrieval: RetrievalOutput) -> list[Contradiction]:
+        """
+        Detect contradictions between retrieved sources.
+
+        Uses a simple heuristic: if two chunks from different documents
+        contain the same entity but different numbers, flag as potential
+        contradiction.
+
+        A production system would use NLI (Natural Language Inference)
+        models for more accurate contradiction detection.
+        """
+        contradictions = []
+        candidates = retrieval.candidates[:5]
+
+        # Look for numerical contradictions
+        number_pattern = re.compile(r'\\b(\\d+\\.?\\d*)\\s*(%|percent|million|billion|thousand)\\b')
+
+        for i in range(len(candidates)):
+            for j in range(i + 1, len(candidates)):
+                ci = candidates[i].chunk
+                cj = candidates[j].chunk
+
+                # Only check cross-document contradictions
+                if ci.document_id == cj.document_id:
+                    continue
+
+                nums_i = set(number_pattern.findall(ci.content))
+                nums_j = set(number_pattern.findall(cj.content))
+
+                # If same unit but different numbers, potential contradiction
+                units_i = {u for _, u in nums_i}
+                units_j = {u for _, u in nums_j}
+                common_units = units_i & units_j
+
+                for unit in common_units:
+                    vals_i = {n for n, u in nums_i if u == unit}
+                    vals_j = {n for n, u in nums_j if u == unit}
+                    if vals_i != vals_j and vals_i and vals_j:
+                        contradictions.append(Contradiction(
+                            claim_a=f"Value: {', '.join(vals_i)} {unit}",
+                            claim_b=f"Value: {', '.join(vals_j)} {unit}",
+                            source_a=ci.filename,
+                            source_b=cj.filename,
+                            page_a=ci.page_number,
+                            page_b=cj.page_number,
+                            severity="major",
+                        ))
+
+        return contradictions
+
+    def _build_reasoning(
+        self,
+        score: float,
+        agreement: float,
+        coverage: float,
+        contradiction: float,
+        contradictions: list[Contradiction],
+        recommendation: str,
+    ) -> str:
+        """Build human-readable reasoning for the assessment."""
+        parts = []
+
+        if score < 0.3:
+            parts.append("Low retrieval scores suggest poor relevance.")
+        elif score < 0.5:
+            parts.append("Moderate retrieval scores.")
+        else:
+            parts.append("Good retrieval scores.")
+
+        if agreement < 0.3:
+            parts.append("Sources show low agreement — may be unrelated.")
+        elif agreement < 0.6:
+            parts.append("Sources show moderate agreement.")
+
+        if coverage < 0.3:
+            parts.append("Evidence does not adequately cover the question.")
+
+        if contradictions:
+            parts.append(f"Detected {len(contradictions)} potential contradiction(s).")
+
+        parts.append(f"Recommendation: {recommendation}.")
+
+        return " ".join(parts)
 `
   },
 
-  // ─── EVALUATION ────────────────────────────────────────
   {
-    path: "src/evaluation/evaluator.py",
+    path: "src/evidence/contradiction.py",
     language: "python",
-    description: "Comprehensive evaluation framework with retrieval and generation metrics.",
-    phase: "Phase 6-7",
+    description: "Contradiction detection and handling — identifies conflicting claims across sources.",
+    phase: "Phase 12",
+    category: "Evidence",
     code: `"""
-src/evaluation/evaluator.py — Evaluation framework.
+src/evidence/contradiction.py — Contradiction detection and handling.
 
-Measures:
-- Retrieval: Recall@K, MRR, nDCG
-- Generation: Factual correctness, groundedness, citation accuracy
-- System: Latency, token usage, cost
-- Abstention: Correct refusal rate, false answering rate
+When documents disagree, the system must NOT silently pick one.
+It should identify the contradiction, cite both sources, and
+communicate uncertainty to the user.
 
-Supports ablation studies by running the same dataset with
-different configurations.
+Example:
+  Document A: "Revenue was $12.5M in Q3"
+  Document B: "Revenue was $14.2M in Q3"
+
+  The system should say:
+  "There is conflicting information about Q3 revenue.
+   Document A reports $12.5M (page 15).
+   Document B reports $14.2M (page 23).
+   The discrepancy may be due to different reporting periods."
+
+This is tested in EXP-14 (contradictory-document evaluation).
+"""
+
+import re
+import logging
+from typing import Optional
+from src.core.models import Contradiction, TextChunk, RetrievalOutput
+
+logger = logging.getLogger(__name__)
+
+
+class ContradictionHandler:
+    """
+    Detects and handles contradictions between sources.
+
+    Strategy:
+    1. Detect numerical contradictions (different numbers, same entity)
+    2. Detect temporal contradictions (same claim, different dates)
+    3. Detect definitional contradictions (different definitions)
+    4. Format contradiction-aware responses
+    """
+
+    def detect_in_retrieval(self, retrieval: RetrievalOutput) -> list[Contradiction]:
+        """Detect contradictions among retrieved candidates."""
+        contradictions = []
+        candidates = retrieval.candidates
+
+        for i in range(len(candidates)):
+            for j in range(i + 1, len(candidates)):
+                ci = candidates[i].chunk
+                cj = candidates[j].chunk
+
+                # Check numerical contradictions
+                num_contras = self._check_numerical(ci, cj)
+                contradictions.extend(num_contras)
+
+                # Check temporal contradictions
+                temp_contras = self._check_temporal(ci, cj)
+                contradictions.extend(temp_contras)
+
+        if contradictions:
+            logger.info(f"Detected {len(contradictions)} contradictions")
+
+        return contradictions
+
+    def _check_numerical(self, a: TextChunk, b: TextChunk) -> list[Contradiction]:
+        """Check for numerical contradictions between two chunks."""
+        contradictions = []
+
+        # Extract number+unit pairs
+        pattern = re.compile(
+            r'(\\$?[\\d,]+\\.?\\d*)\\s*'
+            r'(%|percent|million|billion|thousand|dollars|USD|EUR)?'
+        )
+
+        nums_a = pattern.findall(a.content)
+        nums_b = pattern.findall(b.content)
+
+        # Look for same-context different-value patterns
+        # This is a simplified heuristic
+        if nums_a and nums_b:
+            values_a = {n for n, _ in nums_a if n}
+            values_b = {n for n, _ in nums_b if n}
+
+            # If chunks share topic words but have different numbers
+            words_a = set(a.content.lower().split())
+            words_b = set(b.content.lower().split())
+            topic_overlap = len(words_a & words_b) / min(len(words_a), len(words_b))
+
+            if topic_overlap > 0.3 and values_a != values_b:
+                # Potential contradiction — but only if from different sources
+                if a.document_id != b.document_id:
+                    contradictions.append(Contradiction(
+                        claim_a=f"Values found: {', '.join(list(values_a)[:3])}",
+                        claim_b=f"Values found: {', '.join(list(values_b)[:3])}",
+                        source_a=a.filename,
+                        source_b=b.filename,
+                        page_a=a.page_number,
+                        page_b=b.page_number,
+                        severity="major",
+                    ))
+
+        return contradictions
+
+    def _check_temporal(self, a: TextChunk, b: TextChunk) -> list[Contradiction]:
+        """Check for temporal contradictions."""
+        contradictions = []
+
+        year_pattern = re.compile(r'\\b(20\\d{2})\\b')
+        years_a = set(year_pattern.findall(a.content))
+        years_b = set(year_pattern.findall(b.content))
+
+        # If same years but different claims about them
+        common_years = years_a & years_b
+        if common_years and a.document_id != b.document_id:
+            # Check if they're talking about the same thing
+            words_a = set(a.content.lower().split())
+            words_b = set(b.content.lower().split())
+            overlap = len(words_a & words_b) / min(len(words_a), len(words_b))
+
+            if overlap > 0.4:
+                contradictions.append(Contradiction(
+                    claim_a=f"Claims about {', '.join(common_years)}",
+                    claim_b=f"Conflicting claims about same period",
+                    source_a=a.filename,
+                    source_b=b.filename,
+                    page_a=a.page_number,
+                    page_b=b.page_number,
+                    severity="minor",
+                ))
+
+        return contradictions
+
+    def format_contradiction_warning(self, contradictions: list[Contradiction]) -> str:
+        """Format contradiction warnings for inclusion in the answer."""
+        if not contradictions:
+            return ""
+
+        lines = ["⚠️ CONTRADICTING SOURCES DETECTED:\\n"]
+        for i, c in enumerate(contradictions, 1):
+            lines.append(
+                f"  {i}. {c.source_a} (p.{c.page_a + 1}): {c.claim_a}\\n"
+                f"     vs. {c.source_b} (p.{c.page_b + 1}): {c.claim_b}\\n"
+                f"     Severity: {c.severity}"
+            )
+
+        lines.append(
+            "\\nThe system cannot determine which claim is correct. "
+            "Please verify against the original documents."
+        )
+
+        return "\\n".join(lines)
+`
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // CITATION VALIDATION
+  // ═══════════════════════════════════════════════════════════
+  {
+    path: "src/citations/validator.py",
+    language: "python",
+    description: "Citation validation — verifies that every citation maps to actual retrieved evidence.",
+    phase: "Phase 8",
+    category: "Citations",
+    code: `"""
+src/citations/validator.py — Citation validation.
+
+Every citation in a generated answer must correspond to actual
+retrieved evidence. This module:
+
+1. Extracts citations from LLM output
+2. Validates each citation against retrieved chunks
+3. Checks that cited text actually appears in the source chunk
+4. Removes invalid citations
+5. Reports citation accuracy metrics
+
+WHY: LLMs can generate plausible-looking citations that don't
+actually correspond to any retrieved evidence. Without validation,
+users trust citations that are fabricated.
+
+This is tested in EXP-12 (citation validation impact).
+"""
+
+import re
+import logging
+from typing import Optional
+
+from src.core.models import (
+    Citation, RetrievalOutput, GenerationOutput,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class CitationValidator:
+    """
+    Validates citations against retrieved evidence.
+
+    Validation levels:
+    1. Structural: Citation references a valid chunk index
+    2. Content: Cited text actually appears in the referenced chunk
+    3. Semantic: Cited claim is supported by the chunk (requires NLI)
+    """
+
+    def validate_citations(
+        self,
+        generation: GenerationOutput,
+        retrieval: RetrievalOutput,
+    ) -> GenerationOutput:
+        """
+        Validate all citations in a generation output.
+
+        Removes invalid citations and updates the validated flag.
+        """
+        validated_citations = []
+
+        for citation in generation.citations:
+            is_valid = self._validate_single_citation(citation, retrieval)
+            citation.validated = is_valid
+
+            if is_valid:
+                validated_citations.append(citation)
+            else:
+                logger.warning(
+                    f"Invalid citation removed: chunk_id={citation.chunk_id}, "
+                    f"file={citation.filename}, page={citation.page_number}"
+                )
+
+        generation.citations = validated_citations
+        return generation
+
+    def _validate_single_citation(
+        self,
+        citation: Citation,
+        retrieval: RetrievalOutput,
+    ) -> bool:
+        """
+        Validate a single citation.
+
+        Checks:
+        1. The chunk_id exists in retrieved candidates
+        2. The filename matches
+        3. The page number matches
+        4. The relevant_text actually appears in the chunk content
+        """
+        # Find the matching candidate
+        matching = None
+        for candidate in retrieval.candidates:
+            if candidate.chunk.chunk_id == citation.chunk_id:
+                matching = candidate
+                break
+
+        if matching is None:
+            return False  # Citation references non-existent chunk
+
+        # Verify filename
+        if matching.chunk.filename != citation.filename:
+            return False
+
+        # Verify page number
+        if matching.chunk.page_number != citation.page_number:
+            return False
+
+        # Verify content: does the cited text appear in the chunk?
+        if citation.relevant_text:
+            # Check if at least 50% of the cited text appears in the chunk
+            cited_words = set(citation.relevant_text.lower().split())
+            chunk_words = set(matching.chunk.content.lower().split())
+
+            if not cited_words:
+                return True  # empty citation, skip content check
+
+            overlap = len(cited_words & chunk_words) / len(cited_words)
+            if overlap < 0.5:
+                return False  # cited text doesn't match chunk content
+
+        return True
+
+    def compute_citation_metrics(
+        self,
+        generation: GenerationOutput,
+        retrieval: RetrievalOutput,
+    ) -> dict[str, float]:
+        """
+        Compute citation quality metrics.
+
+        Returns:
+        - citation_precision: fraction of citations that are valid
+        - citation_recall: fraction of claims that have citations
+        - citation_count: total citations
+        - validated_count: citations that passed validation
+        """
+        total = len(generation.citations)
+        validated = sum(1 for c in generation.citations if c.validated)
+
+        precision = validated / total if total > 0 else 0.0
+
+        return {
+            "citation_precision": precision,
+            "citation_count": total,
+            "validated_count": validated,
+            "invalid_count": total - validated,
+        }
+`
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // RETRIEVAL — RRF
+  // ═══════════════════════════════════════════════════════════
+  {
+    path: "src/retrieval/rrf.py",
+    language: "python",
+    description: "Reciprocal Rank Fusion — well-documented implementation with parameter analysis.",
+    phase: "Phase 5",
+    category: "Retrieval",
+    code: `"""
+src/retrieval/rrf.py — Reciprocal Rank Fusion (RRF).
+
+RRF combines ranked lists from multiple retrieval methods into a
+single ranked list. It is:
+- Parameter-free (except k, which has a standard default)
+- Robust to score scale differences between retrievers
+- Well-documented in IR literature
+
+Reference: Cormack, G.V., Clarke, C.L.A., and Buettcher, S.
+"Reciprocal Rank Fusion outperforms Condorcet and individual
+Rank Learning Methods." SIGIR Forum, 2009.
+
+FORMULA:
+  RRF_score(d) = Σ 1/(k + rank_i(d))
+  where the sum is over all retrieval methods i,
+  and rank_i(d) is the rank of document d in method i's output.
+
+WHY RRF over weighted score fusion:
+- Score scales differ between retrievers (cosine ∈ [0,1], BM25 ∈ [0,∞))
+- Normalizing scores introduces arbitrary choices
+- RRF only uses rank information, which is more robust
+- RRF has been empirically shown to outperform score fusion in many settings
+
+LIMITATIONS:
+- Ignores score magnitudes (a document ranked 1st with score 0.99
+  gets the same RRF contribution as one ranked 1st with score 0.51)
+- The parameter k controls how much weight is given to top-ranked items
+  (smaller k = more weight to top items)
+- Standard k=60 is a reasonable default but may not be optimal for all cases
+
+PARAMETER SENSITIVITY:
+- k=1: Almost exclusively uses top-ranked items
+- k=10: Moderate emphasis on top items
+- k=60: Standard default, balanced
+- k=100: More democratic, lower-ranked items get more weight
+"""
+
+import logging
+from collections import defaultdict
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+def reciprocal_rank_fusion(
+    ranked_lists: list[list[dict]],
+    k: int = 60,
+) -> list[dict]:
+    """
+    Combine multiple ranked lists using Reciprocal Rank Fusion.
+
+    Args:
+        ranked_lists: List of ranked result lists.
+            Each result must have a "chunk_id" key.
+            Results should be sorted by relevance (best first).
+        k: RRF constant (default 60). Controls top-item emphasis.
+
+    Returns:
+        Combined list sorted by RRF score (descending).
+        Each item includes "rrf_score" and "rrf_contributions" keys.
+    """
+    scores: dict[str, float] = defaultdict(float)
+    items: dict[str, dict] = {}
+    contributions: dict[str, list[float]] = defaultdict(list)
+
+    for list_idx, ranked_list in enumerate(ranked_lists):
+        for rank, item in enumerate(ranked_list):
+            cid = item["chunk_id"]
+            rrf_score = 1.0 / (k + rank + 1)  # rank is 0-indexed
+            scores[cid] += rrf_score
+            contributions[cid].append(rrf_score)
+
+            if cid not in items:
+                items[cid] = item.copy()
+
+    # Sort by RRF score
+    sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+
+    results = []
+    for cid in sorted_ids:
+        item = items[cid].copy()
+        item["rrf_score"] = scores[cid]
+        item["rrf_contributions"] = contributions[cid]
+        item["score"] = scores[cid]  # for compatibility with pipeline
+        results.append(item)
+
+    logger.debug(
+        f"RRF fusion: {len(ranked_lists)} lists → {len(results)} unique items "
+        f"(k={k})"
+    )
+
+    return results
+
+
+def weighted_score_fusion(
+    ranked_lists: list[list[dict]],
+    weights: list[float],
+) -> list[dict]:
+    """
+    Alternative: weighted score fusion.
+
+    Requires score normalization. Less robust than RRF when
+    score scales differ between retrievers.
+
+    Included for comparison in experiments (EXP-03 vs EXP-04).
+    """
+    if len(ranked_lists) != len(weights):
+        raise ValueError("Number of lists must match number of weights")
+
+    scores: dict[str, float] = defaultdict(float)
+    items: dict[str, dict] = {}
+
+    for list_idx, (ranked_list, weight) in enumerate(zip(ranked_lists, weights)):
+        if not ranked_list:
+            continue
+
+        # Normalize scores to [0, 1]
+        max_score = max(item.get("score", 0) for item in ranked_list) or 1.0
+        min_score = min(item.get("score", 0) for item in ranked_list)
+        score_range = max_score - min_score or 1.0
+
+        for item in ranked_list:
+            cid = item["chunk_id"]
+            normalized = (item.get("score", 0) - min_score) / score_range
+            scores[cid] += normalized * weight
+
+            if cid not in items:
+                items[cid] = item.copy()
+
+    sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+    return [{**items[cid], "score": scores[cid]} for cid in sorted_ids]
+`
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // EXPERIMENTS
+  // ═══════════════════════════════════════════════════════════
+  {
+    path: "experiments/runner.py",
+    language: "python",
+    description: "Experiment runner — executes ablation studies with hypothesis/method/result structure.",
+    phase: "Phase 11",
+    category: "Experiments",
+    code: `"""
+experiments/runner.py — Experiment framework.
+
+Every experiment follows the scientific method:
+1. Hypothesis: What do we expect?
+2. Method: What are we changing?
+3. Variables: What are the independent/dependent variables?
+4. Metrics: What are we measuring?
+5. Result: What actually happened?
+6. Interpretation: Why might it have happened?
+7. Limitation: What could explain a wrong result?
+8. Next step: What should we investigate next?
+
+Each experiment records its FULL configuration snapshot so that
+any result can be reproduced exactly.
 """
 
 import json
 import logging
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import Optional
-from collections import defaultdict
+from datetime import datetime
+from typing import Any, Optional
 
-from src.core.config import config
+from src.core.config import config, AppConfig
 from src.core.models import (
-    BenchmarkQuestion, EvaluationResult, ExperimentResult,
-    SupportLevel, FailureCategory, QuestionType,
+    BenchmarkQuestion, ExperimentResult, EvaluationResult,
 )
-from src.retrieval.hybrid_retriever import HybridRetriever
-from src.generation.generator import Generator
+from src.evaluation.evaluator import Evaluator
 
 logger = logging.getLogger(__name__)
 
 
-class Evaluator:
-    """
-    Evaluation framework for RAG pipeline.
+# ──────────────────────────────────────────────
+# Experiment definitions
+# ──────────────────────────────────────────────
 
-    Supports:
-    - Per-question evaluation with detailed metrics
-    - Aggregate metric computation
-    - Experiment tracking with configuration snapshots
-    - Failure analysis categorization
+EXPERIMENTS: dict[str, dict[str, Any]] = {
+    # ── Retrieval strategy comparison ──
+    "EXP-01_dense_baseline": {
+        "hypothesis": "Dense retrieval alone provides reasonable baseline retrieval quality.",
+        "method": "Run benchmark with dense retrieval only. Disable BM25 and reranking.",
+        "overrides": {
+            "retrieval": {
+                "dense_top_k": 50,
+                "bm25_top_k": 0,
+                "rerank_enabled": False,
+                "adaptive_enabled": False,
+            }
+        },
+    },
+    "EXP-02_bm25_baseline": {
+        "hypothesis": "BM25 alone provides strong lexical retrieval but poor semantic matching.",
+        "method": "Run benchmark with BM25 only. Disable dense retrieval and reranking.",
+        "overrides": {
+            "retrieval": {
+                "dense_top_k": 0,
+                "bm25_top_k": 50,
+                "rerank_enabled": False,
+                "adaptive_enabled": False,
+            }
+        },
+    },
+    "EXP-03_hybrid_rrf": {
+        "hypothesis": "Hybrid retrieval (dense + BM25 with RRF) outperforms either alone.",
+        "method": "Enable both dense and BM25 with RRF fusion. No reranking.",
+        "overrides": {
+            "retrieval": {
+                "dense_top_k": 50,
+                "bm25_top_k": 50,
+                "fusion_method": "rrf",
+                "rerank_enabled": False,
+                "adaptive_enabled": False,
+            }
+        },
+    },
+    "EXP-04_hybrid_dense_heavy": {
+        "hypothesis": "Dense-heavy weighting improves conceptual query retrieval.",
+        "method": "Hybrid with dense_weight=0.8, bm25_weight=0.2.",
+        "overrides": {
+            "retrieval": {
+                "dense_weight": 0.8,
+                "bm25_weight": 0.2,
+                "fusion_method": "weighted",
+                "rerank_enabled": False,
+                "adaptive_enabled": False,
+            }
+        },
+    },
+    "EXP-05_hybrid_lexical_heavy": {
+        "hypothesis": "Lexical-heavy weighting improves exact-match query retrieval.",
+        "method": "Hybrid with dense_weight=0.2, bm25_weight=0.8.",
+        "overrides": {
+            "retrieval": {
+                "dense_weight": 0.2,
+                "bm25_weight": 0.8,
+                "fusion_method": "weighted",
+                "rerank_enabled": False,
+                "adaptive_enabled": False,
+            }
+        },
+    },
+    "EXP-06_adaptive_hybrid": {
+        "hypothesis": "Adaptive hybrid retrieval (query-type-aware weights) outperforms fixed hybrid.",
+        "method": "Enable adaptive retrieval with query classification.",
+        "overrides": {
+            "retrieval": {
+                "adaptive_enabled": True,
+                "adaptive_strategy": "query_type",
+                "rerank_enabled": True,
+            }
+        },
+    },
+
+    # ── Chunking comparison ──
+    "EXP-07_chunking_fixed": {
+        "hypothesis": "Fixed-size chunking provides predictable but suboptimal retrieval.",
+        "overrides": {"chunking": {"strategy": "fixed", "chunk_size": 512, "chunk_overlap": 64}},
+    },
+    "EXP-07_chunking_sentence": {
+        "hypothesis": "Sentence-based chunking preserves semantic boundaries.",
+        "overrides": {"chunking": {"strategy": "sentence", "chunk_size": 512, "chunk_overlap": 64}},
+    },
+    "EXP-07_chunking_recursive": {
+        "hypothesis": "Recursive chunking balances structure preservation with flexibility.",
+        "overrides": {"chunking": {"strategy": "recursive", "chunk_size": 512, "chunk_overlap": 64}},
+    },
+    "EXP-07_chunking_structure": {
+        "hypothesis": "Structure-aware chunking produces topically coherent chunks.",
+        "overrides": {"chunking": {"strategy": "structure", "chunk_size": 512, "chunk_overlap": 64}},
+    },
+
+    # ── Reranking ──
+    "EXP-09_full_with_rerank": {
+        "hypothesis": "Cross-encoder reranking significantly improves precision.",
+        "overrides": {"retrieval": {"rerank_enabled": True, "rerank_top_k": 5}},
+    },
+    "EXP-09_full_no_rerank": {
+        "hypothesis": "Without reranking, precision drops but latency improves.",
+        "overrides": {"retrieval": {"rerank_enabled": False}},
+    },
+
+    # ── Top-K sensitivity ──
+    "EXP-10_topk_3": {"overrides": {"retrieval": {"rerank_top_k": 3}}},
+    "EXP-10_topk_5": {"overrides": {"retrieval": {"rerank_top_k": 5}}},
+    "EXP-10_topk_10": {"overrides": {"retrieval": {"rerank_top_k": 10}}},
+
+    # ── Ablation studies ──
+    "EXP-ABL_no_bm25": {
+        "hypothesis": "Removing BM25 from hybrid reduces lexical retrieval quality.",
+        "overrides": {"retrieval": {"bm25_top_k": 0}},
+    },
+    "EXP-ABL_no_dense": {
+        "hypothesis": "Removing dense from hybrid reduces semantic retrieval quality.",
+        "overrides": {"retrieval": {"dense_top_k": 0}},
+    },
+    "EXP-ABL_no_adaptive": {
+        "hypothesis": "Disabling adaptive retrieval makes all queries use the same strategy.",
+        "overrides": {"retrieval": {"adaptive_enabled": False}},
+    },
+    "EXP-ABL_no_evidence_check": {
+        "hypothesis": "Disabling evidence sufficiency check increases hallucination rate.",
+        "overrides": {"evidence": {"sufficiency_enabled": False}},
+    },
+
+    # ── Full optimized pipeline ──
+    "EXP-19_full_optimized": {
+        "hypothesis": "Full pipeline with all components enabled produces best overall quality.",
+        "overrides": {
+            "retrieval": {
+                "dense_top_k": 50,
+                "bm25_top_k": 50,
+                "fusion_method": "rrf",
+                "rerank_enabled": True,
+                "rerank_top_k": 5,
+                "adaptive_enabled": True,
+            },
+            "evidence": {"sufficiency_enabled": True},
+        },
+    },
+}
+
+
+class ExperimentRunner:
+    """
+    Runs experiments systematically.
+
+    For each experiment:
+    1. Apply configuration overrides
+    2. Load benchmark dataset
+    3. Run evaluation on all questions
+    4. Compute aggregate metrics
+    5. Save results with full metadata
     """
 
     def __init__(self):
-        self.retriever = HybridRetriever()
-        self.generator = Generator()
+        self.evaluator = Evaluator()
 
-    def evaluate_question(self, question: BenchmarkQuestion) -> EvaluationResult:
-        """Evaluate a single question end-to-end."""
-        start_time = time.time()
+    def load_benchmark(self) -> list[BenchmarkQuestion]:
+        """Load the benchmark dataset."""
+        dataset_path = config.evaluation.dataset_path
+        if not dataset_path.exists():
+            logger.error(f"Benchmark dataset not found: {dataset_path}")
+            return []
 
-        # Retrieve
-        retrieval = self.retriever.retrieve(question.question)
+        with open(dataset_path) as f:
+            data = json.load(f)
 
-        # Generate
-        generation = self.generator.generate(question.question, retrieval)
-
-        elapsed = (time.time() - start_time) * 1000
-
-        # Evaluate retrieval quality
-        retrieved_correct_source = self._check_source_match(
-            retrieval, question.source_document
-        )
-        retrieved_correct_passage = self._check_passage_match(
-            retrieval, question.relevant_chunk_ids
-        )
-
-        # Compute recall@K
-        recall_at_k = self._compute_recall_at_k(retrieval, question)
-
-        # Evaluate generation quality
-        factual_correctness = self._estimate_factual_correctness(
-            generation.answer, question.expected_answer, generation.support_level
-        )
-        groundedness = self._estimate_groundedness(generation)
-        citation_accuracy = self._evaluate_citations(generation, retrieval)
-
-        # Detect failures
-        failure_category = self._categorize_failure(
-            question, retrieval, generation,
-            retrieved_correct_source, retrieved_correct_passage,
-        )
-
-        return EvaluationResult(
-            question_id=question.question_id,
-            question=question.question,
-            expected_answer=question.expected_answer,
-            generated_answer=generation.answer,
-            support_level=generation.support_level,
-            retrieved_correct_source=retrieved_correct_source,
-            retrieved_correct_passage=retrieved_correct_passage,
-            recall_at_k=recall_at_k,
-            factual_correctness=factual_correctness,
-            groundedness=groundedness,
-            citation_accuracy=citation_accuracy,
-            hallucination_detected=(
-                generation.support_level == SupportLevel.UNSUPPORTED
-            ),
-            latency_ms=elapsed,
-            failure_category=failure_category,
-        )
+        questions = [BenchmarkQuestion(**q) for q in data.get("questions", [])]
+        logger.info(f"Loaded {len(questions)} benchmark questions")
+        return questions
 
     def run_experiment(
         self,
         name: str,
-        description: str,
+        exp_def: dict[str, Any],
         questions: list[BenchmarkQuestion],
     ) -> ExperimentResult:
-        """Run a complete experiment on the benchmark dataset."""
-        logger.info(f"Starting experiment: {name}")
-        start_time = time.time()
+        """Run a single experiment."""
+        logger.info(f"\\n{'='*60}")
+        logger.info(f"Experiment: {name}")
+        logger.info(f"Hypothesis: {exp_def.get('hypothesis', 'N/A')}")
 
+        # Apply overrides
+        overrides = exp_def.get("overrides", {})
+        self._apply_overrides(overrides)
+
+        # Run evaluation
+        start_time = time.time()
         results = []
         errors = []
 
         for q in questions:
             try:
-                result = self.evaluate_question(q)
+                result = self.evaluator.evaluate_question(q)
                 results.append(result)
             except Exception as e:
-                logger.error(f"Error evaluating question {q.question_id}: {e}")
+                logger.error(f"Error on {q.question_id}: {e}")
                 errors.append(f"{q.question_id}: {str(e)}")
-
-        # Compute aggregate metrics
-        metrics = self._compute_aggregate_metrics(results)
 
         total_time = (time.time() - start_time) * 1000
 
+        # Compute metrics
+        metrics = self.evaluator.compute_aggregate_metrics(results)
+
         experiment = ExperimentResult(
             name=name,
-            description=description,
+            description=exp_def.get("method", ""),
+            hypothesis=exp_def.get("hypothesis", ""),
+            method=exp_def.get("method", ""),
             config_snapshot=self._snapshot_config(),
             dataset_version="v1.0",
             metrics=metrics,
             question_results=results,
             total_latency_ms=total_time,
             errors=errors,
+            interpretation="RESULTS PENDING — requires analysis",
+            limitations="Results depend on benchmark dataset quality",
+            next_experiment="See experiment sequence in docs/RESEARCH_LOG.md",
         )
 
-        # Save results
-        self._save_experiment(experiment)
+        # Save
+        self._save_result(experiment)
 
-        logger.info(f"Experiment '{name}' complete. Metrics: {metrics}")
+        logger.info(f"Metrics: {json.dumps(metrics, indent=2)}")
         return experiment
 
-    def _check_source_match(self, retrieval, expected_source: str) -> bool:
-        """Check if any retrieved chunk is from the expected source document."""
-        for r in retrieval.candidates:
-            if expected_source.lower() in r.chunk.filename.lower():
-                return True
-        return False
+    def run_all(self) -> list[ExperimentResult]:
+        """Run all defined experiments."""
+        questions = self.load_benchmark()
+        if not questions:
+            logger.error("No benchmark questions. Aborting.")
+            return []
 
-    def _check_passage_match(self, retrieval, relevant_chunk_ids: list[str]) -> bool:
-        """Check if any retrieved chunk matches a relevant chunk."""
-        if not relevant_chunk_ids:
-            return False
-        retrieved_ids = {r.chunk.chunk_id for r in retrieval.candidates}
-        return bool(retrieved_ids & set(relevant_chunk_ids))
+        results = []
+        for name, exp_def in EXPERIMENTS.items():
+            result = self.run_experiment(name, exp_def, questions)
+            results.append(result)
 
-    def _compute_recall_at_k(
-        self, retrieval, question: BenchmarkQuestion
-    ) -> dict[str, float]:
-        """Compute Recall@1, Recall@3, Recall@5, Recall@10."""
-        if not question.relevant_chunk_ids:
-            return {}
+        # Generate comparison
+        self._generate_comparison(results)
+        return results
 
-        relevant = set(question.relevant_chunk_ids)
-        recall = {}
-
-        for k in [1, 3, 5, 10]:
-            retrieved_k = {r.chunk.chunk_id for r in retrieval.candidates[:k]}
-            hits = len(relevant & retrieved_k)
-            recall[f"recall@{k}"] = hits / len(relevant) if relevant else 0.0
-
-        return recall
-
-    def _estimate_factual_correctness(
-        self, generated: str, expected: str, support: SupportLevel
-    ) -> float:
-        """
-        Estimate factual correctness.
-
-        This is a heuristic — proper evaluation would use an LLM judge
-        or manual annotation. For now:
-        - SUPPORTED answers get high score
-        - PARTIALLY_SUPPORTED get medium
-        - UNSUPPORTED get low
-        """
-        scores = {
-            SupportLevel.SUPPORTED: 0.85,
-            SupportLevel.PARTIALLY_SUPPORTED: 0.55,
-            SupportLevel.UNSUPPORTED: 0.15,
-            SupportLevel.INSUFFICIENT_EVIDENCE: 0.0,
-        }
-        return scores.get(support, 0.5)
-
-    def _estimate_groundedness(self, generation: GenerationOutput) -> float:
-        """
-        Estimate how grounded the answer is in retrieved evidence.
-
-        Heuristic based on support level and citation count.
-        """
-        if generation.abstained:
-            return 1.0  # correctly abstaining is grounded behavior
-
-        base = {
-            SupportLevel.SUPPORTED: 0.9,
-            SupportLevel.PARTIALLY_SUPPORTED: 0.6,
-            SupportLevel.UNSUPPORTED: 0.2,
-            SupportLevel.INSUFFICIENT_EVIDENCE: 0.0,
-        }.get(generation.support_level, 0.5)
-
-        # Validated citations improve groundedness
-        valid_citations = sum(1 for c in generation.citations if c.validated)
-        citation_bonus = min(valid_citations * 0.05, 0.1)
-
-        return min(base + citation_bonus, 1.0)
-
-    def _evaluate_citations(self, generation, retrieval) -> float:
-        """Evaluate citation accuracy."""
-        if not generation.citations:
-            return 0.0
-
-        valid = sum(1 for c in generation.citations if c.validated)
-        return valid / len(generation.citations)
-
-    def _categorize_failure(
-        self, question, retrieval, generation,
-        correct_source: bool, correct_passage: bool,
-    ) -> Optional[FailureCategory]:
-        """Categorize the type of failure if any."""
-        if generation.abstained and question.answerable:
-            return FailureCategory.RETRIEVAL  # should have answered but didn't
-
-        if not question.answerable and not generation.abstained:
-            return FailureCategory.HALLUCINATION  # answered when shouldn't
-
-        if not correct_source:
-            return FailureCategory.RETRIEVAL
-
-        if not correct_passage and correct_source:
-            return FailureCategory.RANKING
-
-        if generation.support_level == SupportLevel.UNSUPPORTED:
-            return FailureCategory.GENERATION
-
-        if any(not c.validated for c in generation.citations):
-            return FailureCategory.CITATION
-
-        return None
-
-    def _compute_aggregate_metrics(
-        self, results: list[EvaluationResult]
-    ) -> dict[str, float]:
-        """Compute aggregate metrics across all questions."""
-        if not results:
-            return {}
-
-        n = len(results)
-        metrics = {}
-
-        # Retrieval metrics
-        for k in [1, 3, 5, 10]:
-            key = f"recall@{k}"
-            values = [r.recall_at_k.get(key, 0.0) for r in results if r.recall_at_k]
-            metrics[key] = sum(values) / len(values) if values else 0.0
-
-        metrics["source_retrieval_accuracy"] = (
-            sum(1 for r in results if r.retrieved_correct_source) / n
-        )
-        metrics["passage_retrieval_accuracy"] = (
-            sum(1 for r in results if r.retrieved_correct_passage) / n
-        )
-
-        # MRR
-        rr_values = []
-        for r in results:
-            for k, v in r.recall_at_k.items():
-                if v > 0:
-                    first_k = int(k.split("@")[1])
-                    rr_values.append(1.0 / first_k)
-                    break
-            else:
-                rr_values.append(0.0)
-        metrics["mrr"] = sum(rr_values) / len(rr_values) if rr_values else 0.0
-
-        # Generation metrics
-        metrics["factual_correctness"] = (
-            sum(r.factual_correctness for r in results) / n
-        )
-        metrics["groundedness"] = (
-            sum(r.groundedness for r in results) / n
-        )
-        metrics["citation_accuracy"] = (
-            sum(r.citation_accuracy for r in results) / n
-        )
-        metrics["hallucination_rate"] = (
-            sum(1 for r in results if r.hallucination_detected) / n
-        )
-
-        # Abstention metrics
-        answerable = [r for r in results]
-        metrics["abstention_rate"] = (
-            sum(1 for r in results if r.support_level == SupportLevel.INSUFFICIENT_EVIDENCE) / n
-        )
-
-        # Latency
-        latencies = sorted([r.latency_ms for r in results])
-        metrics["latency_p50"] = latencies[len(latencies) // 2] if latencies else 0.0
-        metrics["latency_p95"] = latencies[int(len(latencies) * 0.95)] if latencies else 0.0
-
-        return metrics
+    def _apply_overrides(self, overrides: dict[str, Any]) -> None:
+        """Apply configuration overrides."""
+        for section, values in overrides.items():
+            section_config = getattr(config, section, None)
+            if section_config is None:
+                logger.warning(f"Unknown config section: {section}")
+                continue
+            for key, value in values.items():
+                if hasattr(section_config, key):
+                    setattr(section_config, key, value)
 
     def _snapshot_config(self) -> dict:
-        """Capture current configuration for reproducibility."""
-        from src.core.config import config
+        """Capture full configuration for reproducibility."""
         return {
             "chunking": {
                 "strategy": config.chunking.strategy,
@@ -2133,988 +1827,73 @@ class Evaluator:
                 "dense_top_k": config.retrieval.dense_top_k,
                 "bm25_top_k": config.retrieval.bm25_top_k,
                 "fusion_method": config.retrieval.fusion_method,
+                "dense_weight": config.retrieval.dense_weight,
+                "bm25_weight": config.retrieval.bm25_weight,
                 "rerank_enabled": config.retrieval.rerank_enabled,
                 "rerank_top_k": config.retrieval.rerank_top_k,
+                "adaptive_enabled": config.retrieval.adaptive_enabled,
+            },
+            "evidence": {
+                "sufficiency_enabled": config.evidence.sufficiency_enabled,
+                "min_evidence_score": config.evidence.min_evidence_score,
             },
             "generation": {
                 "model": config.generation.model,
                 "temperature": config.generation.temperature,
+                "abstention_threshold": config.generation.abstention_threshold,
             },
         }
 
-    def _save_experiment(self, experiment: ExperimentResult) -> None:
-        """Save experiment results to disk."""
+    def _save_result(self, experiment: ExperimentResult) -> None:
+        """Save experiment result to disk."""
         output_dir = config.evaluation.results_dir
         output_dir.mkdir(parents=True, exist_ok=True)
 
         filename = f"{experiment.name}_{experiment.timestamp[:10]}.json"
-        output_path = output_dir / filename
-
-        with open(output_path, "w") as f:
+        with open(output_dir / filename, "w") as f:
             json.dump(experiment.model_dump(), f, indent=2, default=str)
 
-        logger.info(f"Experiment saved to {output_path}")
-`
-  },
-
-  // ─── API ───────────────────────────────────────────────
-  {
-    path: "src/api/server.py",
-    language: "python",
-    description: "FastAPI server with document management, querying, and health endpoints.",
-    phase: "Phase 19",
-    code: `"""
-src/api/server.py — FastAPI server for the RAG pipeline.
-
-Endpoints:
-- POST /documents — Upload and ingest a document
-- GET /documents — List all documents
-- DELETE /documents/{id} — Remove a document
-- POST /query — Ask a question
-- GET /health — Health check
-- GET /metrics — System metrics
-"""
-
-import logging
-import time
-import uuid
-from pathlib import Path
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-
-from src.core.config import config
-from src.parsing.pdf_parser import PDFParser
-from src.chunking.chunker import get_chunker
-from src.embeddings.embedder import get_embedder
-from src.indexing.vector_store import VectorIndex
-from src.indexing.bm25_index import BM25Index
-from src.retrieval.hybrid_retriever import HybridRetriever
-from src.generation.generator import Generator
-
-logger = logging.getLogger(__name__)
-
-# ──────────────────────────────────────────────
-# Application state
-# ──────────────────────────────────────────────
-_document_registry: dict[str, dict] = {}  # doc_id → metadata
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Initialize components on startup."""
-    logger.info("Starting RAG Pipeline API...")
-    config.validate()
-    logger.info("API ready.")
-    yield
-    logger.info("Shutting down.")
-
-
-app = FastAPI(
-    title="RAG Pipeline API",
-    description="Research-grade document-grounded question answering",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # restrict in production
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# ──────────────────────────────────────────────
-# Request/Response models
-# ──────────────────────────────────────────────
-class QueryRequest(BaseModel):
-    question: str
-    top_k: int = Query(default=5, ge=1, le=20)
-
-
-class QueryResponse(BaseModel):
-    query_id: str
-    question: str
-    answer: str
-    support_level: str
-    confidence: float
-    citations: list[dict]
-    retrieval_metadata: dict
-    latency: dict
-    abstained: bool
-
-
-class DocumentInfo(BaseModel):
-    document_id: str
-    filename: str
-    num_pages: int
-    num_chunks: int
-    ingested_at: str
-
-
-# ──────────────────────────────────────────────
-# Endpoints
-# ──────────────────────────────────────────────
-@app.post("/documents", response_model=DocumentInfo)
-async def upload_document(file: UploadFile = File(...)):
-    """Upload and ingest a PDF document."""
-    # Validate
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Only PDF files are supported")
-
-    # Save file
-    doc_id = str(uuid.uuid4())
-    save_path = config.DOCUMENTS_DIR / f"{doc_id}_{file.filename}"
-
-    content = await file.read()
-    if len(content) > config.security.max_file_size_mb * 1024 * 1024:
-        raise HTTPException(413, "File too large")
-
-    with open(save_path, "wb") as f:
-        f.write(content)
-
-    # Ingest pipeline
-    try:
-        parser = PDFParser()
-        metadata, page_chunks = parser.parse(save_path)
-
-        chunker = get_chunker(config.chunking.strategy)
-        chunks = chunker.chunk(page_chunks, config.chunking)
-
-        embedder = get_embedder()
-        embeddings = embedder.embed([c.content for c in chunks])
-
-        from src.core.models import EmbeddedChunk
-        embedded = [
-            EmbeddedChunk(**c.model_dump(), embedding=e)
-            for c, e in zip(chunks, embeddings)
+    def _generate_comparison(self, results: list[ExperimentResult]) -> None:
+        """Generate markdown comparison table."""
+        metrics_keys = [
+            "recall@5", "mrr", "factual_correctness",
+            "groundedness", "citation_accuracy",
+            "hallucination_rate", "latency_p50",
         ]
 
-        vector_index = VectorIndex()
-        vector_index.add_chunks(embedded)
-
-        # Update BM25
-        bm25 = BM25Index()
-        bm25.build(chunks)
-
-        # Register
-        _document_registry[metadata.document_id] = {
-            "filename": metadata.filename,
-            "num_pages": metadata.num_pages,
-            "num_chunks": len(chunks),
-            "ingested_at": metadata.ingested_at,
-        }
-
-        return DocumentInfo(
-            document_id=metadata.document_id,
-            filename=metadata.filename,
-            num_pages=metadata.num_pages,
-            num_chunks=len(chunks),
-            ingested_at=metadata.ingested_at,
-        )
-
-    except Exception as e:
-        logger.error(f"Ingestion failed: {e}")
-        save_path.unlink(missing_ok=True)
-        raise HTTPException(500, f"Ingestion failed: {str(e)}")
-
-
-@app.get("/documents", response_model=list[DocumentInfo])
-async def list_documents():
-    """List all ingested documents."""
-    return [
-        DocumentInfo(document_id=doc_id, **info)
-        for doc_id, info in _document_registry.items()
-    ]
-
-
-@app.delete("/documents/{document_id}")
-async def delete_document(document_id: str):
-    """Remove a document and its chunks from all indexes."""
-    if document_id not in _document_registry:
-        raise HTTPException(404, "Document not found")
-
-    vector_index = VectorIndex()
-    vector_index.delete_by_document(document_id)
-
-    del _document_registry[document_id]
-    return {"status": "deleted", "document_id": document_id}
-
-
-@app.post("/query", response_model=QueryResponse)
-async def query(request: QueryRequest):
-    """Ask a question about ingested documents."""
-    if not request.question.strip():
-        raise HTTPException(400, "Question cannot be empty")
-
-    query_id = str(uuid.uuid4())
-    start_time = time.time()
-
-    try:
-        retriever = HybridRetriever()
-        retrieval = retriever.retrieve(request.question)
-
-        generator = Generator()
-        generation = generator.generate(request.question, retrieval)
-
-        total_latency = (time.time() - start_time) * 1000
-
-        return QueryResponse(
-            query_id=query_id,
-            question=request.question,
-            answer=generation.answer,
-            support_level=generation.support_level.value,
-            confidence=generation.confidence,
-            citations=[c.model_dump() for c in generation.citations],
-            retrieval_metadata={
-                "total_candidates": retrieval.total_candidates,
-                "retrieval_latency_ms": retrieval.retrieval_latency_ms,
-                "method_details": retrieval.method_details,
-            },
-            latency={
-                "retrieval_ms": retrieval.retrieval_latency_ms,
-                "generation_ms": generation.generation_latency_ms,
-                "total_ms": total_latency,
-            },
-            abstained=generation.abstained,
-        )
-
-    except Exception as e:
-        logger.error(f"Query failed: {e}")
-        raise HTTPException(500, f"Query failed: {str(e)}")
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    vector_index = VectorIndex()
-    return {
-        "status": "healthy",
-        "vector_store_count": vector_index.count(),
-        "documents_ingested": len(_document_registry),
-    }
-
-
-@app.get("/metrics")
-async def metrics():
-    """System metrics."""
-    vector_index = VectorIndex()
-    bm25 = BM25Index()
-    return {
-        "vector_chunks": vector_index.count(),
-        "bm25_chunks": bm25.count(),
-        "documents": len(_document_registry),
-        "config": {
-            "chunking_strategy": config.chunking.strategy,
-            "embedding_provider": config.embedding.provider,
-            "llm_model": config.generation.model,
-            "retrieval_fusion": config.retrieval.fusion_method,
-        },
-    }
-`
-  },
-
-  // ─── MAIN PIPELINE ─────────────────────────────────────
-  {
-    path: "src/pipeline.py",
-    language: "python",
-    description: "Main pipeline orchestrator — ties all stages together.",
-    phase: "Phase 2",
-    code: `"""
-src/pipeline.py — Main pipeline orchestrator.
-
-Ties together all stages:
-1. Parse documents
-2. Chunk text
-3. Generate embeddings
-4. Build indexes (vector + BM25)
-5. Answer queries
-
-This is the entry point for both CLI and API usage.
-"""
-
-import logging
-import sys
-import time
-from pathlib import Path
-
-from src.core.config import config
-from src.parsing.pdf_parser import PDFParser
-from src.chunking.chunker import get_chunker
-from src.embeddings.embedder import get_embedder
-from src.indexing.vector_store import VectorIndex
-from src.indexing.bm25_index import BM25Index
-from src.retrieval.hybrid_retriever import HybridRetriever
-from src.generation.generator import Generator
-from src.core.models import EmbeddedChunk
-
-logging.basicConfig(
-    level=getattr(logging, config.log_level),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-logger = logging.getLogger(__name__)
-
-
-def ingest_documents(documents_dir: Path | None = None) -> None:
-    """
-    Full ingestion pipeline.
-
-    1. Parse all PDFs in the documents directory
-    2. Chunk the text
-    3. Generate embeddings
-    4. Store in vector index
-    5. Build BM25 index
-    """
-    docs_dir = documents_dir or config.DOCUMENTS_DIR
-
-    if not docs_dir.exists():
-        logger.error(f"Documents directory not found: {docs_dir}")
-        sys.exit(1)
-
-    pdf_files = list(docs_dir.glob("*.pdf"))
-    if not pdf_files:
-        logger.error(f"No PDF files found in {docs_dir}")
-        sys.exit(1)
-
-    logger.info(f"Found {len(pdf_files)} PDF(s) to ingest")
-
-    parser = PDFParser()
-    chunker = get_chunker(config.chunking.strategy)
-    embedder = get_embedder()
-    vector_index = VectorIndex()
-
-    all_chunks = []
-
-    for pdf_path in pdf_files:
-        logger.info(f"Processing: {pdf_path.name}")
-
-        # Parse
-        metadata, page_chunks = parser.parse(pdf_path)
-        logger.info(f"  Parsed: {metadata.num_pages} pages")
-
-        # Chunk
-        chunks = chunker.chunk(page_chunks, config.chunking)
-        logger.info(f"  Chunked: {len(chunks)} chunks ({config.chunking.strategy})")
-
-        all_chunks.extend(chunks)
-
-    if not all_chunks:
-        logger.warning("No chunks produced. Check your documents and chunking config.")
-        return
-
-    # Embed (batched)
-    logger.info(f"Embedding {len(all_chunks)} chunks...")
-    start = time.time()
-    texts = [c.content for c in all_chunks]
-    embeddings = embedder.embed(texts)
-    elapsed = time.time() - start
-    logger.info(f"  Embedded in {elapsed:.1f}s ({len(texts)/elapsed:.0f} chunks/sec)")
-
-    # Store in vector index
-    embedded_chunks = [
-        EmbeddedChunk(**c.model_dump(), embedding=e)
-        for c, e in zip(all_chunks, embeddings)
-    ]
-    vector_index.add_chunks(embedded_chunks)
-
-    # Build BM25 index
-    bm25 = BM25Index()
-    bm25.build(all_chunks)
-
-    logger.info(
-        f"✅ Ingestion complete: {len(all_chunks)} chunks indexed "
-        f"(vector: {vector_index.count()}, bm25: {bm25.count()})"
-    )
-
-
-def query(question: str) -> dict:
-    """
-    Answer a single question.
-
-    Returns structured response with answer, citations, and metadata.
-    """
-    retriever = HybridRetriever()
-    generator = Generator()
-
-    # Retrieve
-    retrieval = retriever.retrieve(question)
-
-    # Generate
-    generation = generator.generate(question, retrieval)
-
-    return {
-        "answer": generation.answer,
-        "support_level": generation.support_level.value,
-        "confidence": generation.confidence,
-        "citations": [
-            {
-                "filename": c.filename,
-                "page": c.page_number + 1,
-                "section": c.section,
-                "evidence": c.relevant_text[:200],
-            }
-            for c in generation.citations
-        ],
-        "abstained": generation.abstained,
-        "latency": {
-            "retrieval_ms": retrieval.retrieval_latency_ms,
-            "generation_ms": generation.generation_latency_ms,
-        },
-    }
-
-
-def interactive_loop() -> None:
-    """Interactive CLI query loop."""
-    print("=" * 60)
-    print("  RAG Pipeline — Interactive Query")
-    print("=" * 60)
-    print()
-
-    vector_index = VectorIndex()
-    count = vector_index.count()
-    if count == 0:
-        print("⚠️  No documents indexed. Run: python -m src.pipeline ingest")
-        return
-
-    print(f"📚 {count} chunks indexed. Ask a question:")
-    print("   Type 'quit' to exit.\\n")
-
-    while True:
-        try:
-            question = input("❓ ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\\nGoodbye!")
-            break
-
-        if not question or question.lower() in ("quit", "exit", "q"):
-            print("Goodbye!")
-            break
-
-        result = query(question)
-
-        print()
-        if result["abstained"]:
-            print(f"⚠️  {result['answer']}")
-        else:
-            print(f"💬 {result['answer']}")
-
-        print(f"\\n📊 Confidence: {result['confidence']:.0%} | "
-              f"Support: {result['support_level']}")
-
-        if result["citations"]:
-            print("\\n📎 Sources:")
-            for c in result["citations"]:
-                page_info = f"p.{c['page']}" if c['page'] else ""
-                section_info = f" [{c['section']}]" if c.get('section') else ""
-                print(f"  • {c['filename']} {page_info}{section_info}")
-
-        print(f"\\n⏱️  Retrieval: {result['latency']['retrieval_ms']:.0f}ms | "
-              f"Generation: {result['latency']['generation_ms']:.0f}ms")
-        print("─" * 60)
-        print()
-
-
-if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "ingest":
-        ingest_documents()
-    else:
-        interactive_loop()
-`
-  },
-
-  // ─── TESTS ─────────────────────────────────────────────
-  {
-    path: "tests/test_chunking.py",
-    language: "python",
-    description: "Unit tests for chunking strategies.",
-    phase: "Phase 18",
-    code: `"""
-tests/test_chunking.py — Unit tests for chunking strategies.
-
-Tests verify:
-- Each strategy produces non-empty chunks
-- Chunks respect size constraints
-- Metadata is preserved
-- Overlap works correctly
-- Edge cases (empty input, tiny documents)
-"""
-
-import pytest
-from src.core.models import TextChunk
-from src.core.config import ChunkingConfig
-from src.chunking.chunker import (
-    FixedSizeChunker, SentenceChunker, RecursiveChunker,
-    StructureAwareChunker, get_chunker,
-)
-
-
-@pytest.fixture
-def sample_page():
-    """Create a sample page chunk for testing."""
-    return TextChunk(
-        document_id="test-doc-1",
-        filename="test.pdf",
-        page_number=0,
-        content=(
-            "Machine learning is a subset of artificial intelligence. "
-            "It enables systems to learn from data.\\n\\n"
-            "Deep learning uses neural networks with many layers. "
-            "These models can learn complex patterns.\\n\\n"
-            "Transfer learning allows reusing pre-trained models. "
-            "This reduces training time significantly.\\n\\n"
-            "Natural language processing handles human language. "
-            "Applications include translation and summarization."
-        ),
-        token_count=60,
-    )
-
-
-@pytest.fixture
-def default_config():
-    return ChunkingConfig(
-        chunk_size=50,    # ~200 chars
-        chunk_overlap=10,  # ~40 chars
-        min_chunk_size=5,  # ~20 chars
-    )
-
-
-class TestFixedSizeChunker:
-    def test_produces_chunks(self, sample_page, default_config):
-        chunker = FixedSizeChunker()
-        chunks = chunker.chunk([sample_page], default_config)
-        assert len(chunks) > 0
-
-    def test_preserves_metadata(self, sample_page, default_config):
-        chunker = FixedSizeChunker()
-        chunks = chunker.chunk([sample_page], default_config)
-        for chunk in chunks:
-            assert chunk.document_id == "test-doc-1"
-            assert chunk.filename == "test.pdf"
-            assert chunk.page_number == 0
-
-    def test_respects_max_size(self, sample_page, default_config):
-        chunker = FixedSizeChunker()
-        chunks = chunker.chunk([sample_page], default_config)
-        max_chars = default_config.chunk_size * 4
-        for chunk in chunks:
-            assert len(chunk.content) <= max_chars + 50  # small tolerance
-
-    def test_empty_input(self, default_config):
-        chunker = FixedSizeChunker()
-        empty_page = TextChunk(
-            document_id="test", filename="empty.pdf",
-            page_number=0, content="", token_count=0,
-        )
-        chunks = chunker.chunk([empty_page], default_config)
-        assert len(chunks) == 0
-
-
-class TestSentenceChunker:
-    def test_does_not_split_sentences(self, sample_page, default_config):
-        chunker = SentenceChunker()
-        chunks = chunker.chunk([sample_page], default_config)
-        # Each chunk should end with sentence-ending punctuation or be the last
-        for chunk in chunks[:-1]:
-            # Allow some tolerance for edge cases
-            assert len(chunk.content) > 0
-
-    def test_produces_chunks(self, sample_page, default_config):
-        chunker = SentenceChunker()
-        chunks = chunker.chunk([sample_page], default_config)
-        assert len(chunks) > 0
-
-
-class TestRecursiveChunker:
-    def test_produces_chunks(self, sample_page, default_config):
-        chunker = RecursiveChunker()
-        chunks = chunker.chunk([sample_page], default_config)
-        assert len(chunks) > 0
-
-    def test_prefers_paragraph_boundaries(self, sample_page, default_config):
-        chunker = RecursiveChunker()
-        chunks = chunker.chunk([sample_page], default_config)
-        # Should prefer splitting at \\n\\n (paragraph boundaries)
-        assert len(chunks) > 0
-
-
-class TestStructureAwareChunker:
-    def test_detects_sections(self):
-        chunker = StructureAwareChunker()
-        page = TextChunk(
-            document_id="test", filename="test.pdf",
-            page_number=0,
-            content=(
-                "Introduction\\n"
-                "This is the introduction paragraph.\\n\\n"
-                "Methods\\n"
-                "This describes the methods used.\\n\\n"
-                "Results\\n"
-                "These are the results of the study."
-            ),
-            token_count=30,
-        )
-        cfg = ChunkingConfig(chunk_size=200, chunk_overlap=10, min_chunk_size=5)
-        chunks = chunker.chunk([page], cfg)
-        sections = {c.section for c in chunks if c.section}
-        assert len(sections) > 0
-
-
-class TestChunkerFactory:
-    def test_get_valid_chunker(self):
-        for strategy in ["fixed", "sentence", "recursive", "structure"]:
-            chunker = get_chunker(strategy)
-            assert chunker is not None
-
-    def test_get_invalid_chunker(self):
-        with pytest.raises(ValueError, match="Unknown chunking strategy"):
-            get_chunker("nonexistent")
-`
-  },
-
-  {
-    path: "tests/test_retrieval.py",
-    language: "python",
-    description: "Unit tests for retrieval components.",
-    phase: "Phase 18",
-    code: `"""
-tests/test_retrieval.py — Tests for retrieval components.
-
-Tests verify:
-- BM25 indexing and search
-- RRF fusion logic
-- Reranking integration
-- Edge cases (empty queries, no results)
-"""
-
-import pytest
-from src.retrieval.hybrid_retriever import HybridRetriever
-
-
-class TestReciprocalRankFusion:
-    """Test RRF fusion algorithm."""
-
-    def test_rrf_combines_results(self):
-        """RRF should combine results from both retrievers."""
-        retriever = HybridRetriever.__new__(HybridRetriever)
-        retriever.cfg = type('Config', (), {'rrf_k': 60})()
-
-        dense = [
-            {"chunk_id": "a", "score": 0.9, "content": "A", "metadata": {}},
-            {"chunk_id": "b", "score": 0.8, "content": "B", "metadata": {}},
-        ]
-        bm25 = [
-            {"chunk_id": "b", "score": 10.0, "content": "B", "metadata": {}},
-            {"chunk_id": "c", "score": 8.0, "content": "C", "metadata": {}},
-        ]
-
-        fused = retriever._reciprocal_rank_fusion(dense, bm25)
-
-        # "b" appears in both, should rank highest
-        assert fused[0]["chunk_id"] == "b"
-        assert len(fused) == 3  # a, b, c
-
-    def test_rrf_handles_empty_inputs(self):
-        retriever = HybridRetriever.__new__(HybridRetriever)
-        retriever.cfg = type('Config', (), {'rrf_k': 60})()
-
-        fused = retriever._reciprocal_rank_fusion([], [])
-        assert len(fused) == 0
-
-    def test_rrf_with_no_overlap(self):
-        retriever = HybridRetriever.__new__(HybridRetriever)
-        retriever.cfg = type('Config', (), {'rrf_k': 60})()
-
-        dense = [{"chunk_id": "a", "score": 0.9, "content": "A", "metadata": {}}]
-        bm25 = [{"chunk_id": "b", "score": 10.0, "content": "B", "metadata": {}}]
-
-        fused = retriever._reciprocal_rank_fusion(dense, bm25)
-        assert len(fused) == 2
-        ids = {f["chunk_id"] for f in fused}
-        assert ids == {"a", "b"}
-
-
-class TestInterleaveFusion:
-    def test_interleave_alternates(self):
-        retriever = HybridRetriever.__new__(HybridRetriever)
-
-        dense = [
-            {"chunk_id": "d1", "content": "D1", "metadata": {}},
-            {"chunk_id": "d2", "content": "D2", "metadata": {}},
-        ]
-        bm25 = [
-            {"chunk_id": "b1", "content": "B1", "metadata": {}},
-            {"chunk_id": "b2", "content": "B2", "metadata": {}},
-        ]
-
-        fused = retriever._interleave_fusion(dense, bm25)
-        assert fused[0]["chunk_id"] == "d1"
-        assert fused[1]["chunk_id"] == "b1"
-        assert fused[2]["chunk_id"] == "d2"
-        assert fused[3]["chunk_id"] == "b2"
-
-    def test_interleave_handles_duplicates(self):
-        retriever = HybridRetriever.__new__(HybridRetriever)
-
-        dense = [{"chunk_id": "a", "content": "A", "metadata": {}}]
-        bm25 = [{"chunk_id": "a", "content": "A", "metadata": {}}]
-
-        fused = retriever._interleave_fusion(dense, bm25)
-        assert len(fused) == 1  # duplicate removed
-`
-  },
-
-  // ─── EXPERIMENTS ───────────────────────────────────────
-  {
-    path: "experiments/run_experiments.py",
-    language: "python",
-    description: "Experiment runner — executes ablation studies and configuration comparisons.",
-    phase: "Phase 11-12",
-    code: `"""
-experiments/run_experiments.py — Experiment framework.
-
-Runs systematic experiments comparing:
-- Retrieval strategies (dense, BM25, hybrid, hybrid+rerank)
-- Chunking strategies (fixed, sentence, recursive, structure)
-- Embedding models (local vs OpenAI)
-- Top-K values
-- Reranking depths
-- Abstention thresholds
-
-Each experiment:
-1. Loads the benchmark dataset
-2. Applies the configuration
-3. Runs evaluation
-4. Saves results with full metadata
-5. Computes aggregate metrics
-
-Results are saved to experiments/results/ for analysis.
-"""
-
-import json
-import logging
-from pathlib import Path
-from datetime import datetime
-from typing import Any
-
-from src.core.config import config, RetrievalConfig, ChunkingConfig
-from src.evaluation.evaluator import Evaluator
-from src.core.models import BenchmarkQuestion
-
-logger = logging.getLogger(__name__)
-
-
-# ──────────────────────────────────────────────
-# Experiment definitions
-# ──────────────────────────────────────────────
-
-EXPERIMENTS = {
-    # ── Retrieval strategy comparison ──
-    "retrieval_dense_only": {
-        "description": "Dense retrieval only (no BM25, no reranking)",
-        "overrides": {
-            "retrieval": {
-                "dense_top_k": 50,
-                "bm25_top_k": 0,  # disable BM25
-                "fusion_method": "rrf",
-                "rerank_enabled": False,
-                "rerank_top_k": 5,
-            }
-        },
-    },
-    "retrieval_bm25_only": {
-        "description": "BM25 retrieval only (no dense, no reranking)",
-        "overrides": {
-            "retrieval": {
-                "dense_top_k": 0,  # disable dense
-                "bm25_top_k": 50,
-                "fusion_method": "rrf",
-                "rerank_enabled": False,
-                "rerank_top_k": 5,
-            }
-        },
-    },
-    "retrieval_hybrid": {
-        "description": "Hybrid retrieval (dense + BM25, no reranking)",
-        "overrides": {
-            "retrieval": {
-                "dense_top_k": 50,
-                "bm25_top_k": 50,
-                "fusion_method": "rrf",
-                "rerank_enabled": False,
-                "rerank_top_k": 5,
-            }
-        },
-    },
-    "retrieval_hybrid_rerank": {
-        "description": "Full pipeline: hybrid + cross-encoder reranking",
-        "overrides": {
-            "retrieval": {
-                "dense_top_k": 50,
-                "bm25_top_k": 50,
-                "fusion_method": "rrf",
-                "rerank_enabled": True,
-                "rerank_top_k": 5,
-            }
-        },
-    },
-
-    # ── Chunking strategy comparison ──
-    "chunking_fixed": {
-        "description": "Fixed-size chunking",
-        "overrides": {"chunking": {"strategy": "fixed", "chunk_size": 512, "chunk_overlap": 64}},
-    },
-    "chunking_sentence": {
-        "description": "Sentence-based chunking",
-        "overrides": {"chunking": {"strategy": "sentence", "chunk_size": 512, "chunk_overlap": 64}},
-    },
-    "chunking_recursive": {
-        "description": "Recursive character chunking",
-        "overrides": {"chunking": {"strategy": "recursive", "chunk_size": 512, "chunk_overlap": 64}},
-    },
-    "chunking_structure": {
-        "description": "Structure-aware chunking",
-        "overrides": {"chunking": {"strategy": "structure", "chunk_size": 512, "chunk_overlap": 64}},
-    },
-
-    # ── Top-K sensitivity ──
-    "topk_3": {
-        "description": "Final top-K = 3",
-        "overrides": {"retrieval": {"rerank_top_k": 3}},
-    },
-    "topk_5": {
-        "description": "Final top-K = 5",
-        "overrides": {"retrieval": {"rerank_top_k": 5}},
-    },
-    "topk_10": {
-        "description": "Final top-K = 10",
-        "overrides": {"retrieval": {"rerank_top_k": 10}},
-    },
-
-    # ── Ablation studies ──
-    "ablation_no_rerank": {
-        "description": "Ablation: remove reranking from full pipeline",
-        "overrides": {"retrieval": {"rerank_enabled": False}},
-    },
-    "ablation_no_bm25": {
-        "description": "Ablation: remove BM25 from hybrid",
-        "overrides": {"retrieval": {"bm25_top_k": 0}},
-    },
-    "ablation_no_dense": {
-        "description": "Ablation: remove dense retrieval from hybrid",
-        "overrides": {"retrieval": {"dense_top_k": 0}},
-    },
-}
-
-
-def load_benchmark_dataset() -> list[BenchmarkQuestion]:
-    """Load the benchmark evaluation dataset."""
-    dataset_path = config.evaluation.dataset_path
-    if not dataset_path.exists():
-        logger.error(f"Benchmark dataset not found: {dataset_path}")
-        return []
-
-    with open(dataset_path) as f:
-        data = json.load(f)
-
-    return [BenchmarkQuestion(**q) for q in data["questions"]]
-
-
-def apply_overrides(overrides: dict[str, Any]) -> None:
-    """Apply configuration overrides for an experiment."""
-    for section, values in overrides.items():
-        section_config = getattr(config, section)
-        for key, value in values.items():
-            if hasattr(section_config, key):
-                setattr(section_config, key, value)
-            else:
-                logger.warning(f"Unknown config key: {section}.{key}")
-
-
-def run_all_experiments() -> None:
-    """Run all defined experiments."""
-    questions = load_benchmark_dataset()
-    if not questions:
-        logger.error("No benchmark questions loaded. Aborting experiments.")
-        return
-
-    logger.info(f"Loaded {len(questions)} benchmark questions")
-
-    evaluator = Evaluator()
-    results_dir = config.evaluation.results_dir
-
-    for exp_name, exp_def in EXPERIMENTS.items():
-        logger.info(f"\\n{'='*60}")
-        logger.info(f"Running experiment: {exp_name}")
-        logger.info(f"Description: {exp_def['description']}")
-
-        # Apply overrides
-        apply_overrides(exp_def["overrides"])
-
-        # Run
-        result = evaluator.run_experiment(
-            name=exp_name,
-            description=exp_def["description"],
-            questions=questions,
-        )
-
-        # Log summary
-        logger.info(f"Results: {json.dumps(result.metrics, indent=2)}")
-        logger.info(f"Saved to: {results_dir}")
-
-    # Generate comparison table
-    generate_comparison_table(results_dir)
-
-
-def generate_comparison_table(results_dir: Path) -> None:
-    """Generate a markdown comparison table from experiment results."""
-    result_files = sorted(results_dir.glob("*.json"))
-    if not result_files:
-        return
-
-    experiments = []
-    for f in result_files:
-        with open(f) as fh:
-            experiments.append(json.load(fh))
-
-    # Build markdown table
-    metrics = ["recall@5", "mrr", "factual_correctness", "groundedness",
-               "citation_accuracy", "hallucination_rate", "latency_p50"]
-
-    lines = ["# Experiment Comparison\\n"]
-    lines.append("| Experiment | " + " | ".join(metrics) + " |")
-    lines.append("|" + "|".join(["---"] * (len(metrics) + 1)) + "|")
-
-    for exp in experiments:
-        name = exp["name"]
-        values = [f'{exp["metrics"].get(m, 0):.3f}' for m in metrics]
-        lines.append(f"| {name} | " + " | ".join(values) + " |")
-
-    output_path = results_dir / "COMPARISON.md"
-    with open(output_path, "w") as f:
-        f.write("\\n".join(lines))
-
-    logger.info(f"Comparison table saved to {output_path}")
+        lines = ["# Experiment Comparison\\n"]
+        lines.append("| Experiment | " + " | ".join(metrics_keys) + " |")
+        lines.append("|" + "---|" * (len(metrics_keys) + 1))
+
+        for exp in results:
+            values = [f'{exp.metrics.get(m, 0):.3f}' for m in metrics_keys]
+            lines.append(f"| {exp.name} | " + " | ".join(values) + " |")
+
+        output_path = config.evaluation.results_dir / "COMPARISON.md"
+        with open(output_path, "w") as f:
+            f.write("\\n".join(lines))
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    run_all_experiments()
+    runner = ExperimentRunner()
+    runner.run_all()
 `
   },
 
-  // ─── BENCHMARK DATASET ─────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // BENCHMARK DATASET
+  // ═══════════════════════════════════════════════════════════
   {
     path: "benchmarks/benchmark_dataset.json",
     language: "json",
-    description: "Evaluation benchmark dataset structure and sample questions.",
+    description: "Evaluation benchmark dataset — 15 question categories with verified ground truth structure.",
     phase: "Phase 10",
+    category: "Benchmarks",
     code: `{
   "version": "1.0.0",
-  "description": "Benchmark dataset for RAG pipeline evaluation. Questions are categorized by type and difficulty. Ground truth must be verified against actual documents.",
-  "construction_methodology": "Questions are constructed to test different retrieval and generation capabilities. Each question has a verified source document and page. Unanswerable questions have answers that do NOT exist in the documents. Questions are NOT automatically assumed to be ground truth — they must be verified by a human annotator against the source documents.",
+  "description": "Benchmark dataset for RAG pipeline evaluation. Questions span 15 categories. Ground truth must be verified against actual documents before use.",
+  "construction_methodology": "Questions are constructed to test different retrieval and generation capabilities. Each question has a verified source document and page. Unanswerable questions have answers that do NOT exist in the documents. IMPORTANT: Synthetic questions are NOT automatically ground truth. Each question must be verified by a human annotator against the source documents. The answerable/unanswerable distinction must be confirmed manually.",
   "categories": {
     "direct_lookup": "Single-fact questions answerable from one passage",
     "multi_hop": "Requires combining information from multiple passages",
@@ -3122,29 +1901,33 @@ if __name__ == "__main__":
     "definition": "What-is / define-type questions",
     "comparison": "Compare two or more concepts from the documents",
     "summarization": "Summarize a section or concept",
-    "cross_section": "Information spanning multiple sections",
+    "cross_section": "Information spanning multiple sections of one document",
     "cross_document": "Information spanning multiple documents",
     "ambiguous": "Question with multiple valid interpretations",
     "unanswerable": "Answer does NOT exist in the documents",
-    "adversarial": "Designed to test hallucination resistance"
+    "adversarial": "Designed to test hallucination resistance and prompt injection",
+    "table_based": "Questions requiring table data extraction",
+    "contradictory": "Documents contain conflicting information",
+    "temporal": "Questions about time sequences or changes over time",
+    "long_context": "Requires retrieving from deep in a large document"
   },
   "questions": [
     {
       "question_id": "q001",
       "question": "What is the main topic of Chapter 3?",
-      "expected_answer": "[To be filled after document ingestion and verification]",
+      "expected_answer": "[VERIFY AGAINST ACTUAL DOCUMENT]",
       "source_document": "sample_document.pdf",
       "source_page": 15,
       "relevant_chunk_ids": [],
       "question_type": "direct_lookup",
       "difficulty": 1,
       "answerable": true,
-      "notes": "Verify against actual document content after ingestion"
+      "notes": "Template — must be filled with verified ground truth"
     },
     {
       "question_id": "q002",
-      "question": "How does the proposed method compare to the baseline?",
-      "expected_answer": "[To be filled after verification]",
+      "question": "How does the proposed method compare to the baseline in terms of accuracy?",
+      "expected_answer": "[VERIFY AGAINST ACTUAL DOCUMENT]",
       "source_document": "sample_document.pdf",
       "source_page": null,
       "relevant_chunk_ids": [],
@@ -3179,8 +1962,8 @@ if __name__ == "__main__":
     },
     {
       "question_id": "q005",
-      "question": "What percentage improvement does the method achieve?",
-      "expected_answer": "[To be filled after verification]",
+      "question": "What percentage improvement does the method achieve over the baseline?",
+      "expected_answer": "[VERIFY AGAINST ACTUAL DOCUMENT]",
       "source_document": "sample_document.pdf",
       "source_page": null,
       "relevant_chunk_ids": [],
@@ -3188,102 +1971,302 @@ if __name__ == "__main__":
       "difficulty": 2,
       "answerable": true,
       "notes": "Tests numerical extraction accuracy"
+    },
+    {
+      "question_id": "q006",
+      "question": "Document A says revenue was $12.5M. Document B says $14.2M. Which is correct?",
+      "expected_answer": "N/A — tests contradiction detection",
+      "source_document": "",
+      "source_page": null,
+      "relevant_chunk_ids": [],
+      "question_type": "contradictory",
+      "difficulty": 4,
+      "answerable": true,
+      "notes": "System should identify the contradiction and cite both sources"
+    },
+    {
+      "question_id": "q007",
+      "question": "How did performance change between 2023 and 2024?",
+      "expected_answer": "[VERIFY — requires temporal reasoning]",
+      "source_document": "annual_reports.pdf",
+      "source_page": null,
+      "relevant_chunk_ids": [],
+      "question_type": "temporal",
+      "difficulty": 3,
+      "answerable": true,
+      "notes": "Requires retrieving data from different time periods"
+    },
+    {
+      "question_id": "q008",
+      "question": "What does the conclusion on page 47 say about limitations?",
+      "expected_answer": "[VERIFY — tests long-context retrieval]",
+      "source_document": "long_paper.pdf",
+      "source_page": 47,
+      "relevant_chunk_ids": [],
+      "question_type": "long_context",
+      "difficulty": 2,
+      "answerable": true,
+      "notes": "Tests retrieval from deep in a large document"
     }
   ],
   "statistics": {
-    "total_questions": 5,
+    "total_questions": 8,
     "by_type": {
       "direct_lookup": 1,
       "comparison": 1,
       "unanswerable": 1,
       "adversarial": 1,
-      "numerical": 1
+      "numerical": 1,
+      "contradictory": 1,
+      "temporal": 1,
+      "long_context": 1
     },
-    "answerable": 3,
+    "answerable": 6,
     "unanswerable": 2,
-    "note": "This is a template. Populate with 100-300 verified questions for real evaluation."
+    "note": "TEMPLATE DATASET. Populate with 100-300 verified questions for real evaluation. Every question must be verified against actual documents."
   }
 }`
   },
 
-  // ─── DOCKER ────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // TESTS
+  // ═══════════════════════════════════════════════════════════
+  {
+    path: "tests/test_adaptive.py",
+    language: "python",
+    description: "Tests for adaptive retrieval — query classification and weight adjustment.",
+    phase: "Phase 18",
+    category: "Tests",
+    code: `"""
+tests/test_adaptive.py — Tests for adaptive retrieval components.
+
+Tests verify:
+- Query classification correctness
+- Weight mapping for each query type
+- Candidate multiplier behavior
+- Fallback to UNKNOWN for ambiguous queries
+"""
+
+import pytest
+from src.adaptive.query_analyzer import QueryAnalyzer
+from src.core.models import QueryType
+
+
+class TestQueryAnalyzer:
+    @pytest.fixture
+    def analyzer(self):
+        return QueryAnalyzer()
+
+    def test_classify_exact_query(self, analyzer):
+        """Queries with numbers/dates should be classified as EXACT."""
+        result = analyzer.classify("What was the revenue in Q3 2024?")
+        assert result == QueryType.EXACT
+
+    def test_classify_conceptual_query(self, analyzer):
+        """Abstract 'how does' queries should be CONCEPTUAL."""
+        result = analyzer.classify("How does the methodology affect results?")
+        assert result == QueryType.CONCEPTUAL
+
+    def test_classify_multi_hop_query(self, analyzer):
+        """Comparison queries should be MULTI_HOP."""
+        result = analyzer.classify("Compare the results between 2023 and 2024")
+        assert result == QueryType.MULTI_HOP
+
+    def test_classify_unknown_fallback(self, analyzer):
+        """Unclear queries should fall back to UNKNOWN."""
+        result = analyzer.classify("Tell me about it")
+        assert result == QueryType.UNKNOWN
+
+    def test_weights_for_exact(self, analyzer):
+        """EXACT queries should be lexical-heavy."""
+        weights = analyzer.get_retrieval_weights(QueryType.EXACT)
+        assert weights["bm25"] > weights["dense"]
+
+    def test_weights_for_conceptual(self, analyzer):
+        """CONCEPTUAL queries should be semantic-heavy."""
+        weights = analyzer.get_retrieval_weights(QueryType.CONCEPTUAL)
+        assert weights["dense"] > weights["bm25"]
+
+    def test_weights_sum_to_one(self, analyzer):
+        """Weights should always sum to 1.0."""
+        for qt in QueryType:
+            weights = analyzer.get_retrieval_weights(qt)
+            assert abs(weights["dense"] + weights["bm25"] - 1.0) < 0.01
+
+    def test_candidate_multiplier_ambiguous(self, analyzer):
+        """AMBIGUOUS queries should retrieve more candidates."""
+        mult = analyzer.get_candidate_multiplier(QueryType.AMBIGUOUS)
+        assert mult >= 2
+
+    def test_candidate_multiplier_exact(self, analyzer):
+        """EXACT queries should use standard candidate count."""
+        mult = analyzer.get_candidate_multiplier(QueryType.EXACT)
+        assert mult == 1
+`
+  },
+
+  {
+    path: "tests/test_evidence.py",
+    language: "python",
+    description: "Tests for evidence sufficiency assessment.",
+    phase: "Phase 18",
+    category: "Tests",
+    code: `"""
+tests/test_evidence.py — Tests for evidence sufficiency checking.
+
+Tests verify:
+- Empty retrieval → abstain
+- High scores → answer
+- Low scores → retrieve_more or abstain
+- Contradiction detection
+- Coverage assessment
+"""
+
+import pytest
+from src.evidence.sufficiency import EvidenceSufficiencyChecker
+from src.core.models import (
+    RetrievalOutput, RetrievalResult, TextChunk,
+)
+
+
+class TestEvidenceSufficiency:
+    @pytest.fixture
+    def checker(self):
+        return EvidenceSufficiencyChecker()
+
+    def test_empty_retrieval_abstains(self, checker):
+        """No candidates → should recommend abstain."""
+        retrieval = RetrievalOutput(
+            query="test",
+            candidates=[],
+            total_candidates=0,
+            retrieval_latency_ms=0.0,
+        )
+        assessment = checker.assess("test query", retrieval)
+        assert assessment.recommendation == "abstain"
+        assert not assessment.is_sufficient
+
+    def test_high_scores_recommend_answer(self, checker):
+        """High retrieval scores → should recommend answer."""
+        chunks = [
+            RetrievalResult(
+                chunk=TextChunk(
+                    chunk_id=f"c{i}", document_id="d1",
+                    filename="test.pdf", page_number=i,
+                    content=f"Relevant content about the topic for query words. " * 5,
+                    token_count=50,
+                ),
+                score=0.85,
+                retrieval_method="dense",
+                rank=i,
+            )
+            for i in range(5)
+        ]
+        retrieval = RetrievalOutput(
+            query="topic query words",
+            candidates=chunks,
+            total_candidates=5,
+            retrieval_latency_ms=10.0,
+        )
+        assessment = checker.assess("topic query words", retrieval)
+        assert assessment.confidence > 0.3
+
+    def test_contradiction_detection(self, checker):
+        """Different numbers from different docs → contradiction."""
+        chunks = [
+            RetrievalResult(
+                chunk=TextChunk(
+                    chunk_id="c1", document_id="doc_a",
+                    filename="a.pdf", page_number=1,
+                    content="Revenue was $12.5 million in Q3.",
+                    token_count=10,
+                ),
+                score=0.8, retrieval_method="dense", rank=0,
+            ),
+            RetrievalResult(
+                chunk=TextChunk(
+                    chunk_id="c2", document_id="doc_b",
+                    filename="b.pdf", page_number=1,
+                    content="Revenue was $14.2 million in Q3.",
+                    token_count=10,
+                ),
+                score=0.7, retrieval_method="dense", rank=1,
+            ),
+        ]
+        retrieval = RetrievalOutput(
+            query="What was Q3 revenue?",
+            candidates=chunks,
+            total_candidates=2,
+            retrieval_latency_ms=5.0,
+        )
+        assessment = checker.assess("What was Q3 revenue?", retrieval)
+        # Should detect contradiction
+        assert len(assessment.contradictions) > 0 or assessment.agreement < 0.8
+`
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // DOCKER + CI
+  // ═══════════════════════════════════════════════════════════
   {
     path: "Dockerfile",
     language: "dockerfile",
-    description: "Docker configuration for reproducible deployment.",
+    description: "Multi-stage Docker build for reproducible deployment.",
     phase: "Phase 23",
+    category: "Infrastructure",
     code: `# ──────────────────────────────────────────────
-# RAG Pipeline — Production Docker Image
+# Stage 1: Build dependencies
 # ──────────────────────────────────────────────
-# Multi-stage build for smaller final image.
-# Stage 1: Install dependencies
-# Stage 2: Runtime with only necessary files
-
 FROM python:3.11-slim as builder
 
 WORKDIR /app
 
-# Install system dependencies for building Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \\
-    build-essential \\
-    && rm -rf /var/lib/apt/lists/*
+    build-essential && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-
 # ──────────────────────────────────────────────
-# Runtime stage
+# Stage 2: Runtime
 # ──────────────────────────────────────────────
 FROM python:3.11-slim as runtime
 
 WORKDIR /app
 
-# Install minimal runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \\
-    curl \\
-    && rm -rf /var/lib/apt/lists/*
+    curl && rm -rf /var/lib/apt/lists/*
 
-# Copy installed Python packages from builder
 COPY --from=builder /install /usr/local
-
-# Copy application code
 COPY src/ ./src/
 COPY benchmarks/ ./benchmarks/
 COPY experiments/ ./experiments/
 COPY configs/ ./configs/
 
-# Create data directories
 RUN mkdir -p data/documents data/chroma_db data/bm25_index logs
 
 # Non-root user for security
 RUN useradd -m -r raguser && chown -R raguser:raguser /app
 USER raguser
 
-# Environment
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV LOG_LEVEL=INFO
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \\
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Expose API port
 EXPOSE 8000
 
-# Default: run the API server
 CMD ["python", "-m", "uvicorn", "src.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
 `
   },
 
-  // ─── GITHUB ACTIONS ────────────────────────────────────
   {
     path: ".github/workflows/ci.yml",
     language: "yaml",
-    description: "CI pipeline — lint, test, validate.",
+    description: "CI pipeline — lint, test, validate configuration.",
     phase: "Phase 23",
+    category: "Infrastructure",
     code: `name: CI
 
 on:
@@ -3311,46 +2294,32 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov ruff mypy
+          pip install pytest ruff mypy
 
       - name: Lint with ruff
-        run: |
-          ruff check src/ tests/
+        run: ruff check src/ tests/
 
-      - name: Type check with mypy
-        run: |
-          mypy src/core/ src/chunking/ --ignore-missing-imports
-        continue-on-error: true  # progressive adoption
-
-      - name: Run unit tests
-        run: |
-          pytest tests/ -v --tb=short -x
-        env:
-          OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
-
-      - name: Run integration tests (mocked)
-        run: |
-          pytest tests/integration/ -v --tb=short -m "not requires_api"
+      - name: Type check (progressive)
+        run: mypy src/core/ --ignore-missing-imports
         continue-on-error: true
 
+      - name: Run unit tests
+        run: pytest tests/ -v --tb=short -x -m "not requires_api"
+        env:
+          OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY || 'mock-key' }}
+
       - name: Validate configuration
-        run: |
-          python -c "from src.core.config import config; config.validate(); print('Config OK')"
+        run: python -c "from src.core.config import config; config.validate(); print('Config OK')"
 
   docker-build:
     runs-on: ubuntu-latest
     needs: lint-and-test
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Build Docker image
-        run: |
-          docker build -t rag-pipeline:test .
-
-      - name: Verify Docker image
-        run: |
-          docker run --rm rag-pipeline:test python -c "from src.core.config import config; print('Docker OK')"
+        run: docker build -t rag-pipeline:test .
+      - name: Verify image
+        run: docker run --rm rag-pipeline:test python -c "from src.core.config import config; print('OK')"
 `
   },
 ];
