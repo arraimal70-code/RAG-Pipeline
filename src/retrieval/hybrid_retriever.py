@@ -1,15 +1,20 @@
 """
-src/retrieval/hybrid_retriever.py — Hybrid retrieval pipeline.
+src/retrieval/hybrid_retriever.py — Hybrid retrieval pipeline with adaptive policy support.
 
 Pipeline:
-1. Dense retrieval (semantic similarity)
-2. BM25 retrieval (lexical matching)
-3. Reciprocal Rank Fusion (combine both)
-4. Reranking (cross-encoder for precision)
-5. Return top-K with full metadata
+1. Accept RetrievalPolicy (from query analysis)
+2. Dense retrieval (semantic similarity) — adjusted by policy
+3. BM25 retrieval (lexical matching) — adjusted by policy
+4. Weighted fusion (using policy weights) or RRF
+5. Reranking (cross-encoder for precision)
+6. Return top-K with full metadata
 
 This is the core retrieval system. Each stage is independently
 configurable and measurable for ablation studies.
+
+CRITICAL: This retriever NOW uses RetrievalPolicy to adapt behavior
+based on query type. Different query types produce different retrieval
+strategies.
 """
 
 import logging
@@ -19,11 +24,12 @@ from collections import defaultdict
 
 from src.core.config import config
 from src.core.models import (
-    RetrievalResult, RetrievalOutput, TextChunk,
+    RetrievalResult, RetrievalOutput, TextChunk, QueryType,
 )
 from src.indexing.vector_store import VectorIndex
 from src.indexing.bm25_index import BM25Index
 from src.embeddings.embedder import get_embedder
+from src.adaptive.policy import RetrievalPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +38,15 @@ class HybridRetriever:
     """
     Hybrid retrieval combining dense + BM25 + reranking.
 
-    The pipeline is fully configurable via RetrievalConfig.
-    Each stage can be disabled for ablation studies.
+    CRITICAL FEATURE: Supports adaptive retrieval via RetrievalPolicy.
+    The policy determines:
+    - Dense vs lexical weight balance
+    - Number of candidates to retrieve
+    - Whether to expand retrieval for ambiguous queries
+    - Reranking configuration
+
+    The pipeline is fully configurable via RetrievalConfig for fixed modes,
+    or via RetrievalPolicy for adaptive modes.
     """
 
     def __init__(self):
@@ -43,41 +56,77 @@ class HybridRetriever:
         self.cfg = config.retrieval
         self._reranker = None
 
-    def retrieve(self, query: str) -> RetrievalOutput:
+    def retrieve(
+        self,
+        query: str,
+        policy: Optional[RetrievalPolicy] = None,
+    ) -> RetrievalOutput:
         """
-        Full retrieval pipeline.
+        Full retrieval pipeline with optional adaptive policy.
 
-        Returns RetrievalOutput with ranked candidates and timing info.
+        Args:
+            query: The search query
+            policy: Optional RetrievalPolicy for adaptive behavior.
+                   If None, uses fixed config values.
+
+        Returns:
+            RetrievalOutput with ranked candidates and timing info.
         """
         start_time = time.time()
         method_details = {}
 
+        # Determine retrieval parameters
+        if policy:
+            # Adaptive mode — use policy parameters
+            dense_top_k = policy.dense_top_k
+            bm25_top_k = policy.lexical_top_k
+            dense_weight = policy.dense_weight
+            bm25_weight = policy.lexical_weight
+            fusion_method = "weighted"  # Use weighted fusion with policy weights
+            rerank_enabled = policy.rerank_enabled
+            rerank_top_k = policy.rerank_top_k
+            method_details["adaptive"] = policy.to_dict()
+            logger.info(f"Using adaptive policy: {policy.query_type.value}")
+        else:
+            # Fixed mode — use config values
+            dense_top_k = self.cfg.dense_top_k
+            bm25_top_k = self.cfg.bm25_top_k
+            dense_weight = self.cfg.dense_weight
+            bm25_weight = self.cfg.bm25_weight
+            fusion_method = self.cfg.fusion_method
+            rerank_enabled = self.cfg.rerank_enabled
+            rerank_top_k = self.cfg.rerank_top_k
+            method_details["adaptive"] = {"mode": "fixed"}
+
         # Stage 1: Dense retrieval
-        dense_results = self._dense_retrieve(query)
-        method_details["dense"] = {"candidates": len(dense_results)}
+        dense_results = self._dense_retrieve(query, top_k=dense_top_k)
+        method_details["dense"] = {"candidates": len(dense_results), "top_k": dense_top_k}
 
         # Stage 2: BM25 retrieval
-        bm25_results = self._bm25_retrieve(query)
-        method_details["bm25"] = {"candidates": len(bm25_results)}
+        bm25_results = self._bm25_retrieve(query, top_k=bm25_top_k)
+        method_details["bm25"] = {"candidates": len(bm25_results), "top_k": bm25_top_k}
 
         # Stage 3: Fusion
-        if self.cfg.fusion_method == "rrf":
+        if fusion_method == "rrf":
             fused = self._reciprocal_rank_fusion(dense_results, bm25_results)
-        elif self.cfg.fusion_method == "weighted":
-            fused = self._weighted_fusion(dense_results, bm25_results)
+        elif fusion_method == "weighted":
+            fused = self._weighted_fusion(dense_results, bm25_results, dense_weight, bm25_weight)
         else:
             fused = self._interleave_fusion(dense_results, bm25_results)
 
         method_details["fusion"] = {
-            "method": self.cfg.fusion_method,
+            "method": fusion_method,
+            "dense_weight": dense_weight,
+            "bm25_weight": bm25_weight,
             "candidates_after_fusion": len(fused),
         }
 
         # Truncate to post-fusion top-K
-        fused = fused[:self.cfg.post_fusion_top_k]
+        post_fusion_top_k = policy.post_fusion_top_k if policy else self.cfg.post_fusion_top_k
+        fused = fused[:post_fusion_top_k]
 
         # Stage 4: Reranking
-        if self.cfg.rerank_enabled and fused:
+        if rerank_enabled and fused:
             fused = self._rerank(query, fused)
             method_details["reranking"] = {
                 "model": self.cfg.rerank_model,
@@ -85,7 +134,7 @@ class HybridRetriever:
             }
 
         # Final truncation
-        final = fused[:self.cfg.rerank_top_k]
+        final = fused[:rerank_top_k]
 
         # Build output
         results = []
@@ -119,17 +168,21 @@ class HybridRetriever:
     # ──────────────────────────────────────────
     # Stage 1: Dense retrieval
     # ──────────────────────────────────────────
-    def _dense_retrieve(self, query: str) -> list[dict]:
+    def _dense_retrieve(self, query: str, top_k: Optional[int] = None) -> list[dict]:
         """Semantic similarity search via vector index."""
+        if top_k is None:
+            top_k = self.cfg.dense_top_k
         query_embedding = self.embedder.embed_query(query)
-        return self.vector_index.search(query_embedding, top_k=self.cfg.dense_top_k)
+        return self.vector_index.search(query_embedding, top_k=top_k)
 
     # ──────────────────────────────────────────
     # Stage 2: BM25 retrieval
     # ──────────────────────────────────────────
-    def _bm25_retrieve(self, query: str) -> list[dict]:
+    def _bm25_retrieve(self, query: str, top_k: Optional[int] = None) -> list[dict]:
         """Lexical keyword search via BM25."""
-        return self.bm25_index.search(query, top_k=self.cfg.bm25_top_k)
+        if top_k is None:
+            top_k = self.cfg.bm25_top_k
+        return self.bm25_index.search(query, top_k=top_k)
 
     # ──────────────────────────────────────────
     # Stage 3: Fusion methods
@@ -152,13 +205,29 @@ class HybridRetriever:
         return reciprocal_rank_fusion([dense, bm25], k=self.cfg.rrf_k)
 
     def _weighted_fusion(
-        self, dense: list[dict], bm25: list[dict]
+        self,
+        dense: list[dict],
+        bm25: list[dict],
+        dense_weight: Optional[float] = None,
+        bm25_weight: Optional[float] = None,
     ) -> list[dict]:
         """
         Weighted score fusion.
 
         Requires score normalization (both scores mapped to [0,1]).
+
+        Args:
+            dense: Dense retrieval results
+            bm25: BM25 retrieval results
+            dense_weight: Weight for dense scores (defaults to config)
+            bm25_weight: Weight for BM25 scores (defaults to config)
         """
+        # Use provided weights or fall back to config
+        if dense_weight is None:
+            dense_weight = self.cfg.dense_weight
+        if bm25_weight is None:
+            bm25_weight = self.cfg.bm25_weight
+
         scores: dict[str, float] = defaultdict(float)
         items: dict[str, dict] = {}
 
@@ -166,14 +235,14 @@ class HybridRetriever:
         max_dense = max((d["score"] for d in dense), default=1.0) or 1.0
         for item in dense:
             cid = item["chunk_id"]
-            scores[cid] += (item["score"] / max_dense) * self.cfg.dense_weight
+            scores[cid] += (item["score"] / max_dense) * dense_weight
             items[cid] = item
 
         # Normalize BM25 scores to [0,1]
         max_bm25 = max((b["score"] for b in bm25), default=1.0) or 1.0
         for item in bm25:
             cid = item["chunk_id"]
-            scores[cid] += (item["score"] / max_bm25) * self.cfg.bm25_weight
+            scores[cid] += (item["score"] / max_bm25) * bm25_weight
             if cid not in items:
                 items[cid] = item
 
