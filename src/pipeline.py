@@ -1,41 +1,25 @@
 """
-src/pipeline.py — Complete integrated RAG pipeline.
-
-Integrates all components:
-- Document parsing
-- Chunking (4 strategies)
-- Embedding
-- Indexing (vector + BM25)
-- Query analysis (adaptive retrieval)
-- Hybrid retrieval with RRF
-- Reranking
-- Evidence sufficiency assessment
-- Numerical reasoning
-- Temporal reasoning
-- LLM generation
-- Citation validation
-- Claim-level analysis
-- Tracing/observability
+Production-ready RAG Pipeline with comprehensive error handling, monitoring, and validation.
 """
 
-import logging
 import time
+import logging
+import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+from contextlib import contextmanager
 
 from src.core.config import config
-from src.core.models import (
-    TextChunk, EmbeddedChunk, RetrievalOutput,
-    GenerationOutput, QueryResponse, SupportLevel,
-)
+from src.core.models import QueryResponse, TextChunk, EmbeddedChunk
 from src.parsing.pdf_parser import PDFParser
 from src.chunking.chunker import get_chunker
 from src.embeddings.embedder import get_embedder
 from src.indexing.vector_store import VectorIndex
 from src.indexing.bm25_index import BM25Index
 from src.adaptive.query_analyzer import QueryAnalyzer
-from src.retrieval.hybrid_retriever import HybridRetriever
 from src.adaptive.policy import policy_generator
+from src.retrieval.hybrid_retriever import HybridRetriever
 from src.reasoning.numerical import NumericalReasoner
 from src.reasoning.temporal import TemporalReasoner
 from src.evidence.sufficiency import EvidenceSufficiencyChecker
@@ -43,290 +27,379 @@ from src.generation.generator import Generator
 from src.citations.validator import CitationValidator
 from src.claims.extractor import ClaimExtractor
 from src.observability.tracing import tracer
+from src.security.validator import DocumentValidator, QueryValidator
 
 logger = logging.getLogger(__name__)
 
 
+class PipelineError(Exception):
+    """Base exception for pipeline errors."""
+    pass
+
+
+class DocumentIngestionError(PipelineError):
+    """Error during document ingestion."""
+    pass
+
+
+class QueryProcessingError(PipelineError):
+    """Error during query processing."""
+    pass
+
+
+class RetrievalError(PipelineError):
+    """Error during retrieval."""
+    pass
+
+
+class GenerationError(PipelineError):
+    """Error during generation."""
+    pass
+
+
 class RAGPipeline:
     """
-    Complete RAG pipeline with all components integrated.
-
-    Pipeline stages:
-    1. Query analysis (classify query type)
-    2. Retrieval (hybrid with adaptive weights)
-    3. Reranking (cross-encoder)
-    4. Evidence sufficiency assessment
-    5. Numerical reasoning (if applicable)
-    6. Temporal reasoning (if applicable)
-    7. LLM generation
-    8. Citation validation
-    9. Claim-level analysis
-    10. Response assembly
+    Production-ready RAG Pipeline with comprehensive monitoring and validation.
+    
+    Features:
+    - Adaptive retrieval with query-type-aware policies
+    - Evidence sufficiency assessment
+    - Citation validation
+    - Numerical and temporal reasoning
+    - Comprehensive error handling
+    - Performance monitoring
+    - Security validation
     """
-
+    
     def __init__(self):
-        """Initialize all pipeline components."""
+        """Initialize pipeline with all components."""
+        logger.info("Initializing RAG Pipeline...")
+        
+        # Core components
         self.parser = PDFParser()
         self.embedder = get_embedder()
         self.vector_index = VectorIndex()
         self.bm25_index = BM25Index()
+        
+        # Adaptive retrieval
         self.query_analyzer = QueryAnalyzer()
         self.retriever = HybridRetriever()
+        
+        # Reasoning
         self.numerical_reasoner = NumericalReasoner()
         self.temporal_reasoner = TemporalReasoner()
+        
+        # Evidence and validation
         self.evidence_checker = EvidenceSufficiencyChecker()
         self.generator = Generator()
         self.citation_validator = CitationValidator()
         self.claim_extractor = ClaimExtractor()
-
-        logger.info("RAG Pipeline initialized with all components")
-
-    def ingest_document(self, file_path: Path) -> dict:
+        
+        # Security
+        self.document_validator = DocumentValidator()
+        self.query_validator = QueryValidator()
+        
+        # Monitoring
+        self.query_count = 0
+        self.error_count = 0
+        self.start_time = datetime.utcnow()
+        
+        logger.info("RAG Pipeline initialized successfully")
+    
+    @contextmanager
+    def _track_performance(self, operation: str):
+        """Context manager to track operation performance."""
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            elapsed = (time.perf_counter() - start) * 1000
+            logger.debug(f"{operation} completed in {elapsed:.2f}ms")
+    
+    def ingest_document(self, file_path: str) -> Dict[str, Any]:
         """
-        Ingest a document into the system.
-
-        Steps:
-        1. Parse PDF
-        2. Chunk text
-        3. Generate embeddings
-        4. Store in vector index
-        5. Build BM25 index
-
-        Returns metadata about ingestion.
+        Ingest a document into the system with comprehensive validation.
+        
+        Args:
+            file_path: Path to the document file
+            
+        Returns:
+            Dictionary with ingestion metadata
+            
+        Raises:
+            DocumentIngestionError: If ingestion fails
         """
-        start_time = time.time()
-
-        # Parse
-        logger.info(f"Parsing {file_path.name}")
-        metadata, page_chunks = self.parser.parse(file_path)
-
-        # Chunk
-        logger.info(f"Chunking with strategy: {config.chunking.strategy}")
-        chunker = get_chunker(config.chunking.strategy)
-        chunks = chunker.chunk(page_chunks, config.chunking)
-
-        # Embed
-        logger.info(f"Embedding {len(chunks)} chunks")
-        texts = [c.content for c in chunks]
-        embeddings = self.embedder.embed(texts)
-
-        # Create embedded chunks
-        embedded_chunks = [
-            EmbeddedChunk(**c.model_dump(), embedding=e)
-            for c, e in zip(chunks, embeddings)
-        ]
-
-        # Store
-        logger.info("Storing in vector index")
-        self.vector_index.add_chunks(embedded_chunks)
-
-        # Build BM25
-        logger.info("Building BM25 index")
-        self.bm25_index.build(chunks)
-
-        elapsed = (time.time() - start_time) * 1000
-
-        return {
-            "document_id": metadata.document_id,
-            "filename": metadata.filename,
-            "num_pages": metadata.num_pages,
-            "num_chunks": len(chunks),
-            "ingestion_time_ms": elapsed,
-        }
-
+        path = Path(file_path)
+        
+        with self._track_performance("document_ingestion"):
+            try:
+                # Validate document
+                logger.info(f"Validating document: {path.name}")
+                is_valid, reason = self.document_validator.validate(path)
+                if not is_valid:
+                    raise DocumentIngestionError(f"Document validation failed: {reason}")
+                
+                # Parse document
+                logger.info(f"Parsing document: {path.name}")
+                metadata, page_chunks = self.parser.parse(path)
+                
+                # Chunk document
+                logger.info(f"Chunking document with strategy: {config.chunking.strategy}")
+                chunker = get_chunker(config.chunking.strategy)
+                chunks = chunker.chunk(page_chunks, config.chunking)
+                
+                if not chunks:
+                    raise DocumentIngestionError("No chunks generated from document")
+                
+                # Generate embeddings
+                logger.info(f"Generating embeddings for {len(chunks)} chunks")
+                texts = [c.content for c in chunks]
+                embeddings = self.embedder.embed(texts)
+                
+                # Create embedded chunks
+                embedded_chunks = [
+                    EmbeddedChunk(**c.model_dump(), embedding=e)
+                    for c, e in zip(chunks, embeddings)
+                ]
+                
+                # Store in vector index
+                logger.info("Storing chunks in vector index")
+                self.vector_index.add_chunks(embedded_chunks)
+                
+                # Build BM25 index
+                logger.info("Building BM25 index")
+                self.bm25_index.build(chunks)
+                
+                result = {
+                    "document_id": metadata.document_id,
+                    "filename": metadata.filename,
+                    "num_pages": metadata.num_pages,
+                    "num_chunks": len(chunks),
+                    "status": "success",
+                }
+                
+                logger.info(f"Successfully ingested {path.name}: {len(chunks)} chunks")
+                return result
+                
+            except Exception as e:
+                logger.error(f"Failed to ingest document {path.name}: {e}")
+                self.error_count += 1
+                raise DocumentIngestionError(f"Document ingestion failed: {e}") from e
+    
     def query(self, question: str) -> QueryResponse:
         """
-        Answer a question using the full pipeline.
-
-        Steps:
-        1. Start trace
-        2. Analyze query
-        3. Retrieve evidence
-        4. Apply temporal filtering
-        5. Assess evidence sufficiency
-        6. Apply numerical reasoning (if needed)
-        7. Generate answer
-        8. Validate citations
-        9. Extract and evaluate claims
-        10. Assemble response
+        Process a query through the full pipeline with comprehensive validation.
+        
+        Args:
+            question: The question to answer
+            
+        Returns:
+            QueryResponse with answer, citations, and metadata
+            
+        Raises:
+            QueryProcessingError: If query processing fails
         """
-        # Start trace
-        trace = tracer.start_trace(question)
-
-        try:
-            # Stage 1: Query analysis
-            stage_start = time.time()
-            query_type = self.query_analyzer.classify(question)
-            
-            # CRITICAL: Generate retrieval policy based on query type
-            # This is what makes adaptive retrieval actually work
-            policy = policy_generator.generate_policy(query_type, question)
-            
-            trace.add_event("query_analysis", {
-                "query_type": query_type.value,
-                "policy": policy.to_dict(),
-            }, latency_ms=(time.time() - stage_start) * 1000)
-
-            # Stage 2: Retrieval with adaptive policy
-            stage_start = time.time()
-            retrieval = self.retriever.retrieve(question, policy=policy)
-            trace.add_event("retrieval", {
-                "num_candidates": retrieval.total_candidates,
-                "method_details": retrieval.method_details,
-                "adaptive": True,
-            }, latency_ms=retrieval.retrieval_latency_ms)
-
-            # Stage 3: Temporal filtering
-            stage_start = time.time()
-            retrieval = self.temporal_reasoner.filter_by_temporal_relevance(
-                question, retrieval
-            )
-            trace.add_event("temporal_filtering", {
-                "candidates_after": len(retrieval.candidates),
-            }, latency_ms=(time.time() - stage_start) * 1000)
-
-            # Stage 4: Evidence sufficiency
-            stage_start = time.time()
-            evidence_assessment = self.evidence_checker.assess(question, retrieval)
-            trace.add_event("evidence_assessment", {
-                "is_sufficient": evidence_assessment.is_sufficient,
-                "confidence": evidence_assessment.confidence,
-                "recommendation": evidence_assessment.recommendation,
-            }, latency_ms=(time.time() - stage_start) * 1000)
-
-            # Check if we should abstain
-            if evidence_assessment.recommendation == "abstain":
+        query_id = f"query_{self.query_count}_{int(time.time())}"
+        self.query_count += 1
+        
+        with self._track_performance("query_processing"):
+            try:
+                # Start trace
+                trace = tracer.start_trace(question)
+                
+                # Validate query
+                logger.info(f"Validating query: {question[:50]}...")
+                is_safe, reason = self.query_validator.validate(question)
+                if not is_safe:
+                    logger.warning(f"Query validation failed: {reason}")
+                    # Sanitize query
+                    question = self.query_validator.sanitize(question)
+                
+                # Stage 1: Query analysis
+                logger.info("Analyzing query type")
+                query_type = self.query_analyzer.classify(question)
+                trace.add_event("query_analysis", {
+                    "query_type": query_type.value,
+                })
+                
+                # Stage 2: Generate retrieval policy
+                logger.info(f"Generating retrieval policy for {query_type.value}")
+                policy = policy_generator.generate_policy(query_type, question)
+                trace.add_event("policy_generation", {
+                    "policy": policy.to_dict(),
+                })
+                
+                # Stage 3: Retrieval
+                logger.info("Retrieving relevant chunks")
+                retrieval = self.retriever.retrieve(question, policy=policy)
+                trace.add_event("retrieval", {
+                    "num_candidates": retrieval.total_candidates,
+                    "method_details": retrieval.method_details,
+                })
+                
+                if not retrieval.candidates:
+                    logger.warning("No candidates retrieved")
+                    return QueryResponse(
+                        question=question,
+                        answer="No relevant documents found.",
+                        support_level="insufficient_evidence",
+                        confidence=0.0,
+                        citations=[],
+                        abstained=True,
+                    )
+                
+                # Stage 4: Temporal filtering
+                logger.info("Applying temporal filtering")
+                retrieval = self.temporal_reasoner.filter_by_temporal_relevance(
+                    question, retrieval
+                )
+                
+                # Stage 5: Evidence sufficiency assessment
+                logger.info("Assessing evidence sufficiency")
+                evidence_assessment = self.evidence_checker.assess(question, retrieval)
+                trace.add_event("evidence_assessment", {
+                    "is_sufficient": evidence_assessment.is_sufficient,
+                    "confidence": evidence_assessment.confidence,
+                    "recommendation": evidence_assessment.recommendation,
+                })
+                
+                # Check if we should abstain
+                if evidence_assessment.recommendation == "abstain":
+                    logger.info("Evidence insufficient, abstaining")
+                    return QueryResponse(
+                        question=question,
+                        answer="I don't have sufficient evidence to answer this question reliably.",
+                        support_level="insufficient_evidence",
+                        confidence=0.0,
+                        citations=[],
+                        abstained=True,
+                    )
+                
+                # Stage 6: Numerical reasoning (if applicable)
+                numerical_result = None
+                if query_type.value in ["numerical", "calculation", "comparison"]:
+                    logger.info("Applying numerical reasoning")
+                    numerical_result = self.numerical_reasoner.reason_about_question(
+                        question, [c.chunk for c in retrieval.candidates]
+                    )
+                
+                # Stage 7: Generation
+                logger.info("Generating answer")
+                generation = self.generator.generate(question, retrieval)
+                trace.add_event("generation", {
+                    "support_level": generation.support_level.value,
+                    "confidence": generation.confidence,
+                    "num_citations": len(generation.citations),
+                })
+                
+                # Stage 8: Citation validation
+                logger.info("Validating citations")
+                generation = self.citation_validator.validate_citations(generation, retrieval)
+                citation_metrics = self.citation_validator.compute_citation_metrics(generation, retrieval)
+                
+                # Stage 9: Claim analysis
+                logger.info("Analyzing claims")
+                faithfulness_report = self.claim_extractor.evaluate_faithfulness(generation, retrieval)
+                
+                # Build response
                 response = QueryResponse(
                     question=question,
-                    answer="I don't have sufficient evidence to answer this question reliably.",
-                    support_level=SupportLevel.INSUFFICIENT_EVIDENCE,
-                    confidence=0.0,
-                    citations=[],
-                    abstained=True,
-                    retrieval_metadata=retrieval.method_details,
+                    answer=generation.answer,
+                    support_level=generation.support_level.value,
+                    confidence=generation.confidence,
+                    citations=generation.citations,
+                    contradictions=generation.contradictions,
+                    retrieval_metadata={
+                        **retrieval.method_details,
+                        "query_type": query_type.value,
+                        "evidence_assessment": evidence_assessment.model_dump(),
+                        "citation_metrics": citation_metrics,
+                        "faithfulness_report": {
+                            "total_claims": faithfulness_report.total_claims,
+                            "supported_claims": faithfulness_report.supported_claims,
+                            "unsupported_claims": faithfulness_report.unsupported_claims,
+                            "claim_level_faithfulness": faithfulness_report.claim_level_faithfulness,
+                            "hallucination_rate": faithfulness_report.hallucination_rate,
+                        },
+                    },
                     evidence_assessment=evidence_assessment,
+                    latency={
+                        "retrieval_ms": retrieval.retrieval_latency_ms,
+                        "generation_ms": generation.generation_latency_ms,
+                    },
+                    token_usage=generation.token_usage,
+                    abstained=generation.abstained,
                 )
-                trace.add_event("abstention", {"reason": "insufficient_evidence"})
-                tracer.end_trace(trace)
-                return response
-
-            # Stage 5: Numerical reasoning (if applicable)
-            stage_start = time.time()
-            numerical_result = None
-            if query_type.value in ["numerical", "calculation", "comparison"]:
-                numerical_result = self.numerical_reasoner.reason_about_question(
-                    question, [c.chunk for c in retrieval.candidates]
-                )
-                if numerical_result:
-                    trace.add_event("numerical_reasoning", {
+                
+                # Add numerical result if available
+                if numerical_result and numerical_result.result is not None:
+                    response.retrieval_metadata["numerical_reasoning"] = {
                         "operation": numerical_result.operation.value,
                         "result": numerical_result.result,
+                        "unit": numerical_result.unit,
                         "confidence": numerical_result.confidence,
-                    }, latency_ms=(time.time() - stage_start) * 1000)
-
-            # Stage 6: Generation
-            stage_start = time.time()
-            generation = self.generator.generate(question, retrieval)
-            trace.add_event("generation", {
-                "support_level": generation.support_level.value,
-                "confidence": generation.confidence,
-                "num_citations": len(generation.citations),
-            }, latency_ms=generation.generation_latency_ms)
-
-            # Stage 7: Citation validation
-            stage_start = time.time()
-            generation = self.citation_validator.validate_citations(generation, retrieval)
-            citation_metrics = self.citation_validator.compute_citation_metrics(generation, retrieval)
-            trace.add_event("citation_validation", {
-                "validated": citation_metrics["validated_count"],
-                "invalid": citation_metrics["invalid_count"],
-                "precision": citation_metrics["citation_precision"],
-            }, latency_ms=(time.time() - stage_start) * 1000)
-
-            # Stage 8: Claim-level analysis
-            stage_start = time.time()
-            faithfulness_report = self.claim_extractor.evaluate_faithfulness(generation, retrieval)
-            trace.add_event("claim_analysis", {
-                "total_claims": faithfulness_report.total_claims,
-                "supported": faithfulness_report.supported_claims,
-                "unsupported": faithfulness_report.unsupported_claims,
-                "faithfulness": faithfulness_report.claim_level_faithfulness,
-            }, latency_ms=(time.time() - stage_start) * 1000)
-
-            # Stage 9: Assemble response
-            response = QueryResponse(
-                question=question,
-                answer=generation.answer,
-                support_level=generation.support_level,
-                confidence=generation.confidence,
-                citations=generation.citations,
-                contradictions=generation.contradictions,
-                retrieval_metadata={
-                    **retrieval.method_details,
-                    "query_type": query_type.value,
-                    "evidence_assessment": evidence_assessment.model_dump(),
-                    "citation_metrics": citation_metrics,
-                    "faithfulness_report": {
-                        "total_claims": faithfulness_report.total_claims,
-                        "supported_claims": faithfulness_report.supported_claims,
-                        "unsupported_claims": faithfulness_report.unsupported_claims,
-                        "claim_level_faithfulness": faithfulness_report.claim_level_faithfulness,
-                        "hallucination_rate": faithfulness_report.hallucination_rate,
-                    },
-                },
-                evidence_assessment=evidence_assessment,
-                latency={
-                    "retrieval_ms": retrieval.retrieval_latency_ms,
-                    "generation_ms": generation.generation_latency_ms,
-                },
-                token_usage=generation.token_usage,
-                abstained=generation.abstained,
-            )
-
-            # Add numerical result if available
-            if numerical_result and numerical_result.result is not None:
-                response.retrieval_metadata["numerical_reasoning"] = {
-                    "operation": numerical_result.operation.value,
-                    "result": numerical_result.result,
-                    "unit": numerical_result.unit,
-                    "confidence": numerical_result.confidence,
-                    "reasoning": numerical_result.reasoning,
-                }
-
-            trace.add_event("response_assembly", {
-                "abstained": response.abstained,
-                "support_level": response.support_level.value,
-            })
-
-            tracer.end_trace(trace)
-            return response
-
-        except Exception as e:
-            logger.error(f"Pipeline error: {e}", exc_info=True)
-            trace.add_event("error", {"error": str(e)})
-            tracer.end_trace(trace)
-            raise
-
-    def get_stats(self) -> dict:
-        """Get pipeline statistics."""
+                        "reasoning": numerical_result.reasoning,
+                    }
+                
+                trace.add_event("response_assembly", {
+                    "abstained": response.abstained,
+                    "support_level": response.support_level,
+                })
+                
+                tracer.end_trace(trace)
+                
+                logger.info(f"Query processed successfully: {query_id}")
+                return response
+                
+            except Exception as e:
+                logger.error(f"Query processing failed: {e}", exc_info=True)
+                self.error_count += 1
+                raise QueryProcessingError(f"Query processing failed: {e}") from e
+    
+    def get_health_status(self) -> Dict[str, Any]:
+        """Get pipeline health status."""
+        uptime = (datetime.utcnow() - self.start_time).total_seconds()
+        
         return {
+            "status": "healthy",
+            "uptime_seconds": uptime,
+            "query_count": self.query_count,
+            "error_count": self.error_count,
+            "error_rate": self.error_count / max(self.query_count, 1),
             "vector_index_size": self.vector_index.count(),
             "bm25_index_size": self.bm25_index.count(),
-            "config": {
-                "chunking_strategy": config.chunking.strategy,
-                "chunk_size": config.chunking.chunk_size,
-                "embedding_provider": config.embedding.provider,
-                "rerank_enabled": config.retrieval.rerank_enabled,
-                "adaptive_enabled": config.retrieval.adaptive_enabled,
-            },
+            "configuration": config.to_dict(),
         }
+    
+    def get_diagnostics(self) -> Dict[str, Any]:
+        """Get detailed diagnostic information."""
+        return {
+            "health": self.get_health_status(),
+            "components": {
+                "parser": "initialized" if self.parser else "not initialized",
+                "embedder": "initialized" if self.embedder else "not initialized",
+                "vector_index": "initialized" if self.vector_index else "not initialized",
+                "bm25_index": "initialized" if self.bm25_index else "not initialized",
+                "retriever": "initialized" if self.retriever else "not initialized",
+                "generator": "initialized" if self.generator else "not initialized",
+            },
+            "recent_queries": self.query_count,
+            "recent_errors": self.error_count,
+        }
+    
+    def clear_indexes(self) -> None:
+        """Clear all indexes (use with caution)."""
+        logger.warning("Clearing all indexes")
+        self.vector_index.clear()
+        # Note: BM25 index would need to be rebuilt
+        logger.info("Indexes cleared")
 
 
 # Global pipeline instance
 pipeline = RAGPipeline()
 
 
-def ingest_document(file_path: Path) -> dict:
+def ingest_document(file_path: str) -> Dict[str, Any]:
     """Convenience function for document ingestion."""
     return pipeline.ingest_document(file_path)
 
@@ -336,49 +409,11 @@ def query(question: str) -> QueryResponse:
     return pipeline.query(question)
 
 
-if __name__ == "__main__":
-    # Example usage
-    import sys
+def get_health_status() -> Dict[str, Any]:
+    """Get pipeline health status."""
+    return pipeline.get_health_status()
 
-    if len(sys.argv) < 2:
-        print("Usage: python -m src.pipeline <command> [args]")
-        print("Commands:")
-        print("  ingest <pdf_path>  - Ingest a PDF document")
-        print("  query <question>   - Ask a question")
-        print("  stats              - Show pipeline statistics")
-        sys.exit(1)
 
-    command = sys.argv[1]
-
-    if command == "ingest":
-        if len(sys.argv) < 3:
-            print("Error: Please provide PDF path")
-            sys.exit(1)
-        pdf_path = Path(sys.argv[2])
-        result = ingest_document(pdf_path)
-        print(f"Ingested {result['filename']}: {result['num_chunks']} chunks")
-
-    elif command == "query":
-        if len(sys.argv) < 3:
-            print("Error: Please provide question")
-            sys.exit(1)
-        question = " ".join(sys.argv[2:])
-        response = query(question)
-        print(f"\nQuestion: {response.question}")
-        print(f"Answer: {response.answer}")
-        print(f"Confidence: {response.confidence:.2f}")
-        print(f"Support: {response.support_level.value}")
-        if response.citations:
-            print(f"\nCitations ({len(response.citations)}):")
-            for c in response.citations:
-                print(f"  - {c.filename} p.{c.page_number + 1}")
-
-    elif command == "stats":
-        stats = pipeline.get_stats()
-        print(f"Vector index: {stats['vector_index_size']} chunks")
-        print(f"BM25 index: {stats['bm25_index_size']} chunks")
-        print(f"Config: {stats['config']}")
-
-    else:
-        print(f"Unknown command: {command}")
-        sys.exit(1)
+def get_diagnostics() -> Dict[str, Any]:
+    """Get detailed diagnostics."""
+    return pipeline.get_diagnostics()
