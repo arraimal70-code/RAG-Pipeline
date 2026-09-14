@@ -1,0 +1,150 @@
+{
+  "manifest_version": "1.0.0",
+  "created_at": "2024-01-15T10:00:00Z",
+  "experiments": [
+    {
+      "id": "EXP-01",
+      "name": "Dense Retrieval Baseline",
+      "description": "Baseline using only dense retrieval",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-01",
+      "expected_output": "experiments/results/EXP-01-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-02",
+      "name": "BM25 Baseline",
+      "description": "Baseline using only BM25 retrieval",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-02",
+      "expected_output": "experiments/results/EXP-02-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-03",
+      "name": "Fixed Hybrid (50/50)",
+      "description": "Equal weighting of dense and BM25",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-03",
+      "expected_output": "experiments/results/EXP-03-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-04",
+      "name": "Dense-Heavy Hybrid (80/20)",
+      "description": "Heavy weighting toward dense retrieval",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-04",
+      "expected_output": "experiments/results/EXP-04-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-05",
+      "name": "Lexical-Heavy Hybrid (20/80)",
+      "description": "Heavy weighting toward BM25 retrieval",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-05",
+      "expected_output": "experiments/results/EXP-05-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-06",
+      "name": "Adaptive Retrieval",
+      "description": "Query-type-aware dynamic weight adjustment",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-06",
+      "expected_output": "experiments/results/EXP-06-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-07",
+      "name": "Hybrid + Reranking",
+      "description": "Fixed hybrid with cross-encoder reranking",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-07",
+      "expected_output": "experiments/results/EXP-07-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-08",
+      "name": "Adaptive + Reranking",
+      "description": "Complete system with adaptive retrieval and reranking",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-08",
+      "expected_output": "experiments/results/EXP-08-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-09",
+      "name": "Structure-Aware Chunking",
+      "description": "Chunking that respects document structure",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-09",
+      "expected_output": "experiments/results/EXP-09-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-10",
+      "name": "Evidence Sufficiency Disabled",
+      "description": "Full system without evidence sufficiency checking",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-10",
+      "expected_output": "experiments/results/EXP-10-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-11",
+      "name": "Evidence Sufficiency Enabled",
+      "description": "Full system with evidence sufficiency checking",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-11",
+      "expected_output": "experiments/results/EXP-11-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-ABL-1",
+      "name": "Ablation: No Reranking",
+      "description": "Full system without reranking",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-ABL-1",
+      "expected_output": "experiments/results/EXP-ABL-1-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-ABL-2",
+      "name": "Ablation: No Adaptive",
+      "description": "Full system without adaptive retrieval",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-ABL-2",
+      "expected_output": "experiments/results/EXP-ABL-2-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    },
+    {
+      "id": "EXP-ABL-3",
+      "name": "Ablation: No Evidence Check",
+      "description": "Full system without evidence sufficiency",
+      "status": "DEFINED_NOT_EXECUTED",
+      "script": "experiments/runner.py",
+      "command": "python experiments/runner.py --experiment EXP-ABL-3",
+      "expected_output": "experiments/results/EXP-ABL-3-<timestamp>.json",
+      "dependencies": ["documents", "benchmark", "api_key"]
+    }
+  ],
+  "total_experiments": 14,
+  "experiments_executed": 0,
+  "experiments_pending": 14,
+  "notes": "This manifest lists all defined experiments. Status 'DEFINED_NOT_EXECUTED' means the experiment infrastructure exists but has not been run. To execute all experiments: python experiments/runner.py"
+}

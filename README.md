@@ -1,38 +1,48 @@
 # RAG Pipeline — Evidence-Aware Adaptive Document Intelligence
 
-> **Status**: Infrastructure complete. **Experiments pending execution.**
+> **⚠️ HONEST STATUS**: Infrastructure complete. **NO EXPERIMENTS EXECUTED. NO RESULTS EXIST.**
 > 
-> **Current Score**: 2.4/10 (per FINAL_TECHNICAL_AUDIT.md)
+> **Current Score**: 2.4/10 (per [RESULT_INTEGRITY_AUDIT.md](docs/RESULT_INTEGRITY_AUDIT.md))
 
-A research-grade Retrieval-Augmented Generation (RAG) system that investigates how to dynamically balance retrieval quality, factual reliability, citation correctness, latency, and computational cost while recognizing when available evidence is insufficient.
+A Retrieval-Augmented Generation (RAG) system infrastructure that investigates how to dynamically balance retrieval quality, factual reliability, citation correctness, latency, and computational cost while recognizing when available evidence is insufficient.
 
 ---
 
-## ⚠️ Honest Status
+## ⚠️ CRITICAL: What Actually Exists
 
-**What exists:**
-- ✅ Complete code infrastructure for adaptive, evidence-aware RAG
-- ✅ 19 experiments + ablation studies defined
-- ✅ Comprehensive evaluation framework
-- ✅ 20-category benchmark structure
-- ✅ Security validation framework
-- ✅ Performance measurement tools
+### ✅ Code Infrastructure (Complete)
 
-**What does NOT exist:**
-- ❌ **No experiments have been executed**
-- ❌ **No real results have been generated**
-- ❌ **No performance has been measured**
-- ❌ **No real-world validation has occurred**
-- ❌ **No statistical analysis has been performed**
+- Adaptive retrieval system (code implemented, not validated)
+- Evidence sufficiency framework (code implemented, not validated)
+- Citation validation (code implemented, not validated)
+- Security framework (code implemented, not tested)
+- 19 experiments defined (not executed)
+- Performance measurement tools (not executed)
+- Statistical analysis tools (not executed)
 
-**To get real results, you must:**
-1. Obtain actual financial documents (SEC filings)
-2. Set up OpenAI API key
-3. Run `python experiments/runner.py`
-4. Run `python scripts/measure_performance.py`
-5. Run `python scripts/validate_realworld.py`
+### ❌ Experimental Evidence (Absent)
 
-**Any numbers claiming performance metrics are placeholders until experiments are actually run.**
+- **0 experiments executed** (19 defined)
+- **0 results generated** (all metrics are placeholders)
+- **0 performance measurements** (all latency claims are fabricated)
+- **0 real-world validation** (no documents processed)
+- **0 statistical analysis** (no data to analyze)
+
+### 📊 Honest Benchmark
+
+- **20 template questions** (not 100+ as previously claimed)
+- **0 verified against actual documents** (all answers are placeholders)
+- **0 source documents present** (documents referenced but not provided)
+
+**See [RESULT_INTEGRITY_AUDIT.md](docs/RESULT_INTEGRITY_AUDIT.md) for complete audit.**
+
+---
+
+## 🎯 Research Question
+
+**How can a RAG system dynamically balance retrieval quality, factual reliability, latency, and computational cost while recognizing when available evidence is insufficient to answer a question?**
+
+This project provides infrastructure to investigate this question, but **no experimental evidence has been generated yet**.
 
 ---
 
@@ -52,430 +62,306 @@ Response with Citations + Confidence + Tracing
 
 | Component | Status | Description |
 |-----------|--------|-------------|
-| **Adaptive Retrieval** | ✅ Implemented | Query-type-aware weight adjustment |
-| **Hybrid Retrieval** | ✅ Implemented | Dense + BM25 + RRF fusion |
-| **Cross-Encoder Reranking** | ✅ Implemented | Precision improvement |
-| **Evidence Sufficiency** | ✅ Implemented | Multi-signal assessment |
-| **Numerical Reasoning** | ✅ Implemented | Programmatic calculation |
-| **Temporal Reasoning** | ✅ Implemented | Period-aware retrieval |
-| **Citation Validation** | ✅ Implemented | Structural validation |
-| **Claim Analysis** | ✅ Implemented | Atomic claim evaluation |
-| **Contradiction Detection** | ✅ Implemented | Conflict identification |
-| **Observability** | ✅ Implemented | Full query tracing |
+| **Adaptive Retrieval** | 🔲 Code exists | Query-type-aware weight adjustment (not validated) |
+| **Hybrid Retrieval** | 🔲 Code exists | Dense + BM25 + RRF fusion (not validated) |
+| **Cross-Encoder Reranking** | 🔲 Code exists | Precision improvement (not validated) |
+| **Evidence Sufficiency** | 🔲 Code exists | Multi-signal assessment (not validated) |
+| **Numerical Reasoning** | 🔲 Code exists | Programmatic calculation (not validated) |
+| **Temporal Reasoning** | 🔲 Code exists | Period-aware retrieval (not validated) |
+| **Citation Validation** | 🔲 Code exists | Structural validation (not validated) |
+| **Claim Analysis** | 🔲 Code exists | Atomic claim evaluation (not validated) |
+| **Contradiction Detection** | 🔲 Code exists | Conflict identification (not validated) |
+| **Observability** | 🔲 Code exists | Full query tracing (not validated) |
 
 ---
 
-## 📊 Benchmark
+## 📋 How to Generate Real Results
 
-**Current Status**: Template structure with 10 example questions
+### Prerequisites
 
-**Target**: 150-300 verified questions across 20 categories
+1. **Obtain real financial documents** (SEC filings from EDGAR)
+2. **Set up OpenAI API key**
+3. **Install dependencies**
 
-**Categories**:
-1. Direct lookup
-2. Semantic/conceptual
-3. Numerical
-4. Definition
-5. Comparison
-6. Summarization
-7. Multi-hop
-8. Cross-section
-9. Cross-document
-10. Ambiguous
-11. Unanswerable
-12. Adversarial
-13. Table-based
-14. Contradictory
-15. Temporal
-16. Long-context
-17. Citation verification
-18. Evidence insufficiency
-19. Entity matching
-20. Calculation
+### Step-by-Step
 
-**Validation**: Run `python scripts/validate_benchmark.py benchmarks/benchmark_v2.json`
+```bash
+# 1. Clone repository
+git clone https://github.com/arraimal70-code/RAG-Pipeline.git
+cd RAG-Pipeline
+
+# 2. Install dependencies
+pip install -r requirements.txt
+npm install
+
+# 3. Set up environment
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+
+# 4. Obtain financial documents
+mkdir -p data/documents
+# Download from SEC EDGAR:
+# - Apple 10-K (2023)
+# - Microsoft 10-K (2023)
+# - Amazon 10-K (2023)
+# - etc. (8 documents minimum)
+
+# 5. Run experiments (THIS WILL GENERATE REAL RESULTS)
+python scripts/run_experiments.py
+
+# 6. Measure performance (THIS WILL MEASURE REAL PERFORMANCE)
+python scripts/measure_performance.py
+
+# 7. Validate with real documents (THIS WILL VALIDATE REAL ACCURACY)
+python scripts/validate_realworld.py \
+  --documents data/documents/*.pdf \
+  --queries benchmarks/honest_benchmark.json
+
+# 8. Run security tests (THIS WILL TEST REAL SECURITY)
+pytest tests/test_security_comprehensive.py -v
+
+# 9. Statistical analysis (THIS WILL ANALYZE REAL DATA)
+python scripts/statistical_analysis.py
+```
+
+### Expected Output
+
+After running these commands, you will have:
+
+- `experiments/results/EXP-*-*.json` - Real experiment results
+- `performance_results/*.json` - Real performance measurements
+- `validation_results/*.json` - Real validation results
+- `tests/results/*.log` - Real test results
+- `statistical_results/*.json` - Real statistical analysis
+
+**Only then can you make legitimate performance claims.**
+
+---
+
+## 📊 Current Honest Metrics
+
+| Metric | Status | Notes |
+|--------|--------|-------|
+| Recall@5 | ❌ Not measured | No experiments executed |
+| Precision@5 | ❌ Not measured | No experiments executed |
+| P95 Latency | ❌ Not measured | No performance measurements |
+| Answer Accuracy | ❌ Not measured | No real-world validation |
+| Citation Accuracy | ❌ Not measured | No citations validated |
+| Security Tests | ❌ Not executed | Tests defined but not run |
+| Scalability | ❌ Not tested | No scalability tests run |
+
+**All previous performance claims were fabricated. See [VERIFIED_SCORECARD.md](docs/VERIFIED_SCORECARD.md).**
 
 ---
 
 ## 🧪 Experiments
 
-**19 experiments + 6 ablation studies defined:**
+### Defined Experiments (19 total)
 
-### Retrieval Strategy
-- EXP-01: Dense baseline
-- EXP-02: BM25 baseline
-- EXP-03: Hybrid RRF
-- EXP-04: Dense-heavy hybrid
-- EXP-05: Lexical-heavy hybrid
-- EXP-06: Adaptive hybrid
+| ID | Name | Status |
+|----|------|--------|
+| EXP-01 | Dense Baseline | 🔲 Defined, not executed |
+| EXP-02 | BM25 Baseline | 🔲 Defined, not executed |
+| EXP-03 | Fixed Hybrid (50/50) | 🔲 Defined, not executed |
+| EXP-04 | Dense-Heavy (80/20) | 🔲 Defined, not executed |
+| EXP-05 | Lexical-Heavy (20/80) | 🔲 Defined, not executed |
+| EXP-06 | Adaptive Retrieval | 🔲 Defined, not executed |
+| EXP-07 | Hybrid + Reranking | 🔲 Defined, not executed |
+| EXP-08 | Adaptive + Reranking | 🔲 Defined, not executed |
+| EXP-09 | Structure-Aware Chunking | 🔲 Defined, not executed |
+| EXP-10 | Evidence Sufficiency Disabled | 🔲 Defined, not executed |
+| EXP-11 | Evidence Sufficiency Enabled | 🔲 Defined, not executed |
+| EXP-ABL-1 | Ablation: No Reranking | 🔲 Defined, not executed |
+| EXP-ABL-2 | Ablation: No Adaptive | 🔲 Defined, not executed |
+| EXP-ABL-3 | Ablation: No Evidence Check | 🔲 Defined, not executed |
 
-### Chunking
-- EXP-07: Fixed vs Sentence vs Recursive vs Structure-aware
-
-### Components
-- EXP-09: Reranking impact
-- EXP-10: Top-K sensitivity
-- EXP-11: Evidence sufficiency
-- EXP-12: Citation validation
-- EXP-13: Contradiction detection
-
-### Ablations
-- EXP-ABL-1 to EXP-ABL-5: Remove individual components
-
-### Full System
-- EXP-19: Full optimized pipeline
-
-**Status**: ❌ **Not yet executed** — Run with `python experiments/runner.py`
+**Run all experiments**: `python scripts/run_experiments.py`
 
 ---
 
-## 🚀 Quick Start
+## 📋 Benchmark
 
-### 1. Install
+### Honest Assessment
 
-```bash
-git clone https://github.com/arraimal70-code/RAG-Pipeline.git
-cd RAG-Pipeline
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your OPENAI_API_KEY
-```
+- **Total questions**: 20 (not 100+)
+- **Verified against documents**: 0
+- **Source documents present**: 0
+- **Status**: Template questions with placeholder answers
 
-### 2. Prepare Documents
+**See [benchmarks/honest_benchmark.json](benchmarks/honest_benchmark.json)**
 
-```bash
-mkdir -p data/documents
-# Add your PDF documents (e.g., SEC filings)
-```
+### To Create a Real Benchmark
 
-### 3. Ingest
-
-```bash
-python -m src.pipeline ingest data/documents/
-```
-
-### 4. Query
-
-```bash
-python -m src.pipeline query "What was the revenue in 2023?"
-```
-
-### 5. Run Experiments
-
-```bash
-python experiments/runner.py
-```
-
-### 6. Measure Performance
-
-```bash
-python scripts/measure_performance.py
-```
-
----
-
-## 📈 Results
-
-**Status**: ❌ **NOT YET MEASURED**
-
-To generate results:
-1. Obtain real financial documents (SEC filings)
-2. Populate benchmark with 150-300 verified questions
-3. Run all experiments
-4. Analyze results
-
-**Expected Metrics**:
-- Retrieval: Recall@K, MRR, nDCG
-- Generation: Factual correctness, groundedness
-- Citations: Precision, recall, validation accuracy
-- System: Latency (p50, p95), token usage, cost
-- Abstention: Correct refusal rate, false refusal rate
-
----
-
-## 🔬 Key Innovations
-
-### 1. Evidence-Aware Adaptive Retrieval
-
-Instead of fixed retrieval weights, the system:
-- Classifies query type (numerical, conceptual, comparison, etc.)
-- Adjusts dense/BM25 weights based on query characteristics
-- Expands retrieval for ambiguous queries
-- Logs all decisions for analysis
-
-**Research Question**: Does adaptive routing improve retrieval quality?
-
-**Status**: ✅ Implemented, ❌ Not validated experimentally
-
-### 2. Evidence Sufficiency Assessment
-
-Before generating answers, the system assesses:
-- Retrieval score quality
-- Evidence agreement between sources
-- Evidence coverage of the question
-- Contradiction presence
-
-Then decides: **Answer** | **Retrieve More** | **Abstain**
-
-**Research Question**: Can evidence checking reduce hallucination?
-
-**Status**: ✅ Implemented, ❌ Not validated experimentally
-
-### 3. Numerical Reasoning
-
-Extracts numerical values and performs programmatic calculations to avoid LLM arithmetic hallucination.
-
-**Example**: "What was the growth rate?" → Extract numbers → Calculate programmatically
-
-**Status**: ✅ Implemented, ❌ Not validated experimentally
-
-### 4. Temporal Reasoning
-
-Ensures retrieved evidence matches the question's time period. Prevents returning FY2023 data for FY2024 questions.
-
-**Status**: ✅ Implemented, ❌ Not validated experimentally
-
-### 5. Claim-Level Faithfulness
-
-Splits answers into atomic claims and evaluates each against evidence independently.
-
-**Example**: "Revenue increased 12%, driven by international sales" → 2 claims → Evaluate each
-
-**Status**: ✅ Implemented, ❌ Not validated experimentally
+1. Obtain actual financial documents
+2. Manually verify each answer against document content
+3. Update benchmark with verified answers
+4. Run validation script
 
 ---
 
 ## 🔒 Security
 
-**Implemented Protections**:
-- ✅ Input validation (file type, size)
-- ✅ Prompt injection pattern detection
-- ✅ Resource limits
-- ✅ Non-root Docker execution
-- ✅ Secrets in environment variables
+### Security Framework (Not Tested)
 
-**Test Coverage**:
-- ✅ Basic security tests
-- ❌ Comprehensive adversarial testing
-- ❌ Penetration testing
+- ✅ Prompt injection protection (code exists)
+- ✅ Document validation (code exists)
+- ✅ Rate limiting (code exists)
+- ✅ Input sanitization (code exists)
+- ❌ **Tests not executed**
 
-**Documentation**: See `docs/SECURITY.md`
+**Run security tests**: `pytest tests/test_security_comprehensive.py -v`
+
+---
+
+## ⚡ Performance
+
+### Performance Tools (Not Executed)
+
+- ✅ Latency measurement script (exists)
+- ✅ Throughput measurement script (exists)
+- ✅ Cost estimation script (exists)
+- ❌ **No measurements taken**
+
+**Measure performance**: `python scripts/measure_performance.py`
 
 ---
 
 ## 📚 Documentation
 
-| Document | Description |
-|----------|-------------|
-| `docs/ARCHITECTURE.md` | System architecture |
-| `docs/RESEARCH_QUESTION.md` | Research questions & hypotheses |
-| `docs/METHODOLOGY.md` | Experimental methodology |
-| `docs/EXPERIMENTS.md` | Experiment descriptions |
-| `docs/BENCHMARK.md` | Benchmark construction |
-| `docs/RESULTS.md` | Results (after running) |
-| `docs/FINDINGS.md` | Findings (after analysis) |
-| `docs/FAILURE_ANALYSIS.md` | Failure taxonomy |
-| `docs/SECURITY.md` | Security considerations |
-| `docs/LIMITATIONS.md` | Known limitations |
-| `docs/DECISIONS.md` | Engineering decisions |
-| `docs/REPRODUCIBILITY.md` | Reproduction guide |
-| `docs/FINAL_PROJECT_AUDIT.md` | Complete project audit |
+### Honest Documentation
+
+- [RESULT_INTEGRITY_AUDIT.md](docs/RESULT_INTEGRITY_AUDIT.md) - Complete audit of all claims
+- [VERIFIED_SCORECARD.md](docs/VERIFIED_SCORECARD.md) - Claim vs evidence tracking
+- [HONEST_STATUS.md](docs/HONEST_STATUS.md) - Current state assessment
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
+- [RESEARCH_QUESTION.md](docs/RESEARCH_QUESTION.md) - Research questions
+- [METHODOLOGY.md](docs/METHODOLOGY.md) - Experimental methodology
+- [LIMITATIONS.md](docs/LIMITATIONS.md) - Known limitations
 
 ---
 
-## ⚠️ Limitations
+## 🎓 What This Project Actually Is
 
-### Critical
+✅ **A well-designed code infrastructure** for adaptive, evidence-aware RAG  
+✅ **A comprehensive experiment framework** ready to be executed  
+✅ **A professional web interface** for displaying results  
+✅ **A complete security framework** ready to be tested  
+✅ **A thorough documentation structure**  
 
-1. **No experimental results** — All claims unvalidated
-2. **Benchmark is template** — Needs 150-300 verified questions
-3. **Evaluation is heuristic** — Uses support-level as proxy
-4. **Single embedding model** — Only MiniLM tested
-5. **Single LLM** — Only GPT-4o-mini tested
-
-### Technical
-
-6. **PDF-only** — No other document formats
-7. **No OCR** — Scanned documents not handled
-8. **No table extraction** — Tables not specially handled
-9. **No statistical analysis** — Confidence intervals not computed
-10. **No human evaluation** — All metrics automated
-
-### What Should NOT Be Claimed
-
-❌ "The system achieves X% accuracy" (no experiments run)
-❌ "Adaptive retrieval outperforms fixed hybrid" (not tested)
-❌ "State-of-the-art performance" (no baselines compared)
-❌ "Production-ready" (no stress testing)
-
-### What CAN Be Claimed
-
-✅ "The infrastructure for evaluation is complete"
-✅ "The system implements adaptive retrieval, evidence sufficiency, and abstention"
-✅ "The architecture supports reproducible experiments"
-✅ "The code is modular and testable"
-✅ "The system treats documents as untrusted input"
+❌ **NOT a validated research system**  
+❌ **NOT a production-ready system**  
+❌ **NOT a system with measured performance**  
+❌ **NOT a system with proven results**  
 
 ---
 
-## 🔄 Reproducibility
+## 🚀 Path to Real Results
 
-### Reproduce Experiments
+### Phase 1: Execute Experiments (1-2 weeks)
 
-```bash
-# See exact commands
-python scripts/reproduce.py
+1. Obtain real financial documents
+2. Run all 19 experiments
+3. Generate real results
+4. Analyze findings
 
-# Run all experiments
-python experiments/runner.py
+### Phase 2: Measure Performance (1 week)
 
-# View results
-cat experiments/results/COMPARISON.md
+1. Run performance benchmarks
+2. Generate performance reports
+3. Identify bottlenecks
+
+### Phase 3: Validate Real-World (1 week)
+
+1. Process actual documents
+2. Answer real queries
+3. Measure accuracy
+4. Compare with baseline
+
+### Phase 4: Statistical Analysis (1 week)
+
+1. Calculate confidence intervals
+2. Perform significance tests
+3. Calculate effect sizes
+4. Document findings
+
+**Total time**: 4-6 weeks
+
+**Expected outcome**: Real experimental results (quality unknown until measured)
+
+---
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+RAG-Pipeline/
+├── src/
+│   ├── adaptive/          # Adaptive retrieval
+│   ├── api/               # API server
+│   ├── chunking/          # Chunking strategies
+│   ├── citations/         # Citation validation
+│   ├── claims/            # Claim analysis
+│   ├── core/              # Core models & config
+│   ├── embeddings/        # Embedding generation
+│   ├── evaluation/        # Evaluation framework
+│   ├── evidence/          # Evidence sufficiency
+│   ├── generation/        # LLM generation
+│   ├── indexing/          # Vector & BM25 indexes
+│   ├── observability/     # Tracing & logging
+│   ├── parsing/           # PDF parsing
+│   ├── reasoning/         # Numerical & temporal
+│   ├── retrieval/         # Retrieval strategies
+│   └── security/          # Security validation
+├── tests/                 # Test suite
+├── benchmarks/            # Benchmark datasets
+├── experiments/           # Experiment runner
+│   ├── results/           # Experiment results (empty)
+│   ├── configs/           # Experiment configs
+│   └── manifest.json      # Experiment manifest
+├── scripts/               # Utility scripts
+└── docs/                  # Documentation
 ```
 
-### Docker
+### Run Tests
 
 ```bash
-docker build -t rag-pipeline .
-docker run -p 8000:8000 --env-file .env rag-pipeline
-```
-
-### Configuration Snapshot
-
-Every experiment records:
-- Full configuration
-- Dataset version
-- Model versions
-- Timestamp
-- Git commit SHA
-
----
-
-## 🎓 Real-World Use Case
-
-**Domain**: Financial Document Intelligence
-
-**Target Users**:
-- Financial analysts researching company filings
-- Students learning financial analysis
-- Investors comparing quarterly reports
-- Researchers studying financial trends
-
-**Example Workflow**:
-1. Upload 10-K filings for 3 companies (2022-2024)
-2. Ask: "How did operating margin change from 2023 to 2024?"
-3. System retrieves relevant passages
-4. System extracts numerical values
-5. System calculates growth rate
-6. System provides answer with citations
-7. System shows confidence level
-
-**Status**: ❌ **Not yet validated** — Requires real documents
-
----
-
-## 🧪 Testing
-
-```bash
-# Run all tests
+# All tests
 pytest tests/ -v
 
-# Run integration tests
-pytest tests/test_integration.py -v
+# Security tests
+pytest tests/test_security_comprehensive.py -v
 
-# Run security tests
-pytest tests/test_security.py -v
-
-# Run with coverage
-pytest tests/ --cov=src --cov-report=html
+# Adaptive retrieval tests
+pytest tests/test_adaptive_retrieval.py -v
 ```
-
-**Test Coverage**: ~40% (target: 60%+)
-
----
-
-## 📊 Current Project Score
-
-| Dimension | Score | Justification |
-|-----------|-------|---------------|
-| Architecture | 8/10 | Clean, modular, well-designed |
-| Implementation | 7/10 | Most components implemented, some not integrated |
-| Testing | 4/10 | Integration tests added, coverage ~40% |
-| Benchmark | 2/10 | Structure exists, needs real questions |
-| Experiments | 1/10 | Defined but not executed |
-| Results | 0/10 | No results exist |
-| Findings | 0/10 | No findings exist |
-| Documentation | 8/10 | Comprehensive, honest |
-| Security | 5/10 | Basic protections, incomplete testing |
-| Performance | 0/10 | Not measured |
-| Real-World Validation | 1/10 | Not validated |
-| Reproducibility | 6/10 | Can install, cannot reproduce results |
-
-**OVERALL SCORE: 3.5/10**
-
-**Why**: Strong infrastructure, but no evidence. Like a laboratory with all equipment but no experiments run.
-
----
-
-## 🚀 Next Steps
-
-### Immediate (Research Integrity)
-
-1. **Create real benchmark**
-   - Obtain SEC filings
-   - Create 150-300 verified questions
-   - Validate with `scripts/validate_benchmark.py`
-
-2. **Execute experiments**
-   - Run all 19 experiments
-   - Generate results
-   - Populate RESULTS.md
-
-3. **Analyze findings**
-   - Compare retrieval strategies
-   - Validate adaptive retrieval
-   - Document discoveries
-
-### Secondary (Quality)
-
-4. **Increase test coverage** to 60%+
-5. **Measure performance** (latency, cost)
-6. **Validate real-world use** with actual documents
-
-### Tertiary (Polish)
-
-7. **Enhance security** (auth, rate limiting)
-8. **Test scalability** (10, 100, 1000 documents)
-9. **Add human evaluation**
 
 ---
 
 ## 📄 License
 
-MIT License — See LICENSE file
-
----
-
-## 🙏 Acknowledgments
-
-Built with:
-- LangChain — LLM orchestration
-- ChromaDB — Vector storage
-- sentence-transformers — Local embeddings
-- OpenAI — LLM generation
-- FastAPI — API server
+MIT License - see LICENSE file for details
 
 ---
 
 ## 📞 Support
 
-For issues, questions, or contributions:
+For issues and questions:
+
 - Open an issue on GitHub
-- Consult the documentation
-- Run `python scripts/reproduce.py` for reproduction help
+- Check the documentation
+- Review the test suite for examples
 
 ---
 
-**Final Note**: This repository contains excellent infrastructure but requires experimental validation. The architecture is sound, the code is clean, but the central research questions remain unanswered. Run the experiments, generate the evidence, and discover what actually works.
+<div align="center">
+
+**Status**: ⚠️ Infrastructure Complete, Results Pending
+
+**Honest Score**: 2.4/10
+
+**Ready for**: Experiment Execution → Real Results → Legitimate Claims
+
+[View Audit](docs/RESULT_INTEGRITY_AUDIT.md) • [View Scorecard](docs/VERIFIED_SCORECARD.md) • [Run Experiments](scripts/run_experiments.py)
+
+</div>
