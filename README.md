@@ -1,22 +1,38 @@
 # RAG Pipeline — Evidence-Aware Adaptive Document Intelligence
 
 > **Status**: Infrastructure complete. **Experiments pending execution.**
+> 
+> **Current Score**: 2.4/10 (per FINAL_TECHNICAL_AUDIT.md)
 
 A research-grade Retrieval-Augmented Generation (RAG) system that investigates how to dynamically balance retrieval quality, factual reliability, citation correctness, latency, and computational cost while recognizing when available evidence is insufficient.
 
 ---
 
-## 🎯 Research Question
+## ⚠️ Honest Status
 
-**How can a RAG system dynamically balance retrieval quality, factual reliability, latency, and computational cost while recognizing when available evidence is insufficient to answer a question?**
-
-This project provides:
-- ✅ Complete infrastructure for adaptive, evidence-aware RAG
+**What exists:**
+- ✅ Complete code infrastructure for adaptive, evidence-aware RAG
 - ✅ 19 experiments + ablation studies defined
 - ✅ Comprehensive evaluation framework
 - ✅ 20-category benchmark structure
-- ❌ **Experiments not yet executed** (requires documents + API key)
-- ❌ **Results not yet generated** (must run experiments)
+- ✅ Security validation framework
+- ✅ Performance measurement tools
+
+**What does NOT exist:**
+- ❌ **No experiments have been executed**
+- ❌ **No real results have been generated**
+- ❌ **No performance has been measured**
+- ❌ **No real-world validation has occurred**
+- ❌ **No statistical analysis has been performed**
+
+**To get real results, you must:**
+1. Obtain actual financial documents (SEC filings)
+2. Set up OpenAI API key
+3. Run `python experiments/runner.py`
+4. Run `python scripts/measure_performance.py`
+5. Run `python scripts/validate_realworld.py`
+
+**Any numbers claiming performance metrics are placeholders until experiments are actually run.**
 
 ---
 

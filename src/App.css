@@ -977,6 +977,45 @@ body {
   box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* Status Warning */
+.status-warning {
+  background: #fff5f5;
+  border: 2px solid #f56565;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 2rem 0;
+}
+
+.status-warning strong {
+  color: #c53030;
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.status-warning p {
+  color: #742a2a;
+  line-height: 1.6;
+}
+
+.status-warning code {
+  background: #fed7d7;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  color: #c53030;
+}
+
+/* Pending State */
+.result-card.pending {
+  border-top-color: #ed8936;
+  background: #fffaf0;
+}
+
+.result-card.pending .result-metric {
+  color: #ed8936;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .header h1 {
