@@ -58,6 +58,17 @@ Thumbs.db
 # Temporary files
 temp_uploads/
 *.tmp
+
+# Node.js (for the web interface)
 node_modules/
+package-lock.json
+yarn.lock
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+build/
 .next/
 *.log
