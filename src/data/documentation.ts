@@ -923,4 +923,447 @@ Everything. No experiments have been run. All hypotheses are untested.
 This is a well-engineered framework for studying RAG systems. The architecture is sound, the code is clean, and the experimental methodology is rigorous. However, **the project's central claim — that adaptive retrieval and evidence sufficiency improve reliability — is completely unvalidated.** Until experiments are executed and results are populated, this is a promising infrastructure, not a research contribution.
 `
   },
+
+  {
+    title: "Research Question",
+    path: "docs/RESEARCH_QUESTION.md",
+    icon: "🎯",
+    category: "Research",
+    content: `# Research Question
+
+## Central Question
+
+> **How can a document-grounded RAG system dynamically balance retrieval quality, factual reliability, latency, computational cost, and evidence sufficiency while recognizing when it should answer, retrieve more evidence, or abstain?**
+
+## Sub-Questions
+
+1. Does adaptive retrieval outperform fixed hybrid retrieval?
+2. When does BM25 outperform dense retrieval, and vice versa?
+3. Does hybrid retrieval actually improve retrieval quality over either alone?
+4. Does cross-encoder reranking justify its latency cost?
+5. Can evidence sufficiency assessment reduce hallucinations?
+6. Can the system reliably recognize unanswerable questions?
+7. Can citation validation detect unsupported claims?
+8. How should contradictory documents be handled?
+9. What is the quality/latency/cost frontier?
+10. Which pipeline components actually matter?
+
+## Hypotheses
+
+- H1: Adaptive retrieval improves Recall@5 over fixed 50/50 hybrid
+- H2: BM25 outperforms dense for exact-match queries
+- H3: Hybrid retrieval outperforms either dense-only or BM25-only
+- H4: Reranking improves Precision@5 by >10% at <100ms additional latency
+- H5: Evidence sufficiency reduces hallucination rate by >50%
+- H6: Abstention achieves >80% accuracy on unanswerable questions
+
+## Status
+
+**RESULTS PENDING** — Experiments require document ingestion and API access.
+`
+  },
+
+  {
+    title: "Limitations",
+    path: "docs/LIMITATIONS.md",
+    icon: "⚠️",
+    category: "Audit",
+    content: `# Limitations
+
+## Honest Assessment
+
+### 1. No Experimental Results
+**Status**: RESULTS PENDING
+**Impact**: All claims about system performance are unvalidated.
+
+### 2. Benchmark is a Template
+**Status**: 20 template questions, needs 200+ verified questions
+**Impact**: Cannot produce meaningful evaluation metrics.
+
+### 3. Evaluation is Heuristic
+**Status**: Factual correctness uses support-level as proxy
+**Impact**: Metrics may not reflect true answer quality.
+
+### 4. Single Embedding Model
+**Status**: Only all-MiniLM-L6-v2 tested
+**Impact**: Cannot determine if better embeddings improve performance.
+
+### 5. Single LLM
+**Status**: Only GPT-4o-mini tested
+**Impact**: Cannot determine if better LLMs reduce hallucination.
+
+### 6. PDF-Only
+**Status**: No support for DOCX, HTML, Markdown
+**Impact**: Limited to PDF documents.
+
+### 7. No OCR
+**Status**: Scanned PDFs not handled
+**Impact**: Cannot process image-based PDFs.
+
+## What Should NOT Be Claimed
+
+- ❌ "The system achieves X% accuracy" (no experiments run)
+- ❌ "Adaptive retrieval outperforms fixed hybrid" (not tested)
+- ❌ "State-of-the-art performance" (no baselines compared)
+- ❌ "Production-ready" (no stress testing)
+
+## What CAN Be Claimed
+
+- ✅ "The infrastructure for evaluation is complete"
+- ✅ "The system implements adaptive retrieval, evidence sufficiency, and abstention"
+- ✅ "The architecture supports reproducible experiments"
+- ✅ "The code is modular and testable"
+`
+  },
+
+  {
+    title: "Findings",
+    path: "docs/FINDINGS.md",
+    icon: "💡",
+    category: "Research",
+    content: `# Findings
+
+> **STATUS: PENDING** — This document will be populated after experiments are executed.
+
+## Purpose
+
+This document records actual research findings discovered through experimentation. Findings are NOT pre-written — they emerge from running experiments and analyzing results.
+
+## Expected Finding Categories
+
+### Retrieval Method Findings
+- Does hybrid retrieval outperform dense-only or BM25-only?
+- For which query types does each method excel?
+
+### Adaptive Retrieval Findings
+- Does query-type-aware weighting improve performance?
+- Which query categories benefit most from adaptation?
+
+### Chunking Findings
+- Which chunking strategy produces best retrieval?
+- Does structure-aware chunking help for financial documents?
+
+### Reranking Findings
+- Does cross-encoder reranking justify its latency cost?
+
+### Evidence Sufficiency Findings
+- Does evidence checking reduce hallucination?
+- What is the false refusal rate?
+
+## How Findings Will Be Documented
+
+Each finding will include:
+1. **Observation**: What was measured
+2. **Data**: Actual numbers from experiments
+3. **Interpretation**: Why this might be the case
+4. **Confidence**: How confident we are
+5. **Implication**: What this means for system design
+6. **Caveats**: Limitations of the finding
+
+---
+
+*This document will be updated as experiments are executed.*
+`
+  },
+
+  {
+    title: "Results",
+    path: "docs/RESULTS.md",
+    icon: "📊",
+    category: "Research",
+    content: `# Experiment Results
+
+> **STATUS: RESULTS PENDING** — No experiments have been executed yet.
+
+## How to Generate Results
+
+\`\`\`bash
+# 1. Add financial documents
+mkdir -p data/documents
+cp /path/to/sec_filings/*.pdf data/documents/
+
+# 2. Ingest documents
+python -m src.pipeline ingest
+
+# 3. Run experiments
+python experiments/runner.py
+
+# 4. View results
+cat experiments/results/COMPARISON.md
+\`\`\`
+
+## Metrics Tracked
+
+### Retrieval Metrics
+- Recall@1, Recall@3, Recall@5, Recall@10
+- MRR (Mean Reciprocal Rank)
+- nDCG@5
+
+### Generation Metrics
+- Factual correctness
+- Groundedness
+- Citation precision/recall
+- Hallucination rate
+- Claim-level faithfulness
+
+### System Metrics
+- End-to-end latency (p50, p95)
+- Token usage
+- Estimated cost per query
+
+---
+
+*This document will be populated with actual results after experiments are executed.*
+`
+  },
+
+  {
+    title: "Experiments",
+    path: "docs/EXPERIMENTS.md",
+    icon: "🧪",
+    category: "Research",
+    content: `# Experiment Suite
+
+## Overview
+
+19 experiments + ablation studies designed to systematically investigate each component's contribution.
+
+## Experiment List
+
+### Retrieval Strategy (EXP-01 to EXP-06)
+- EXP-01: Dense baseline
+- EXP-02: BM25 baseline
+- EXP-03: Hybrid RRF
+- EXP-04: Dense-heavy hybrid
+- EXP-05: Lexical-heavy hybrid
+- EXP-06: Adaptive hybrid
+
+### Chunking (EXP-07)
+- EXP-07a: Fixed chunking
+- EXP-07b: Sentence chunking
+- EXP-07c: Recursive chunking
+- EXP-07d: Structure-aware chunking
+
+### Component Impact (EXP-09, EXP-10)
+- EXP-09: Reranking impact
+- EXP-10: Top-K sensitivity
+
+### Reliability (EXP-11 to EXP-13)
+- EXP-11: Evidence sufficiency
+- EXP-12: Citation validation
+- EXP-13: Contradiction detection
+
+### Ablation Studies (EXP-ABL)
+- EXP-ABL-1: No BM25
+- EXP-ABL-2: No Dense
+- EXP-ABL-3: No Adaptive
+- EXP-ABL-4: No Evidence Check
+- EXP-ABL-5: No Reranker
+
+### Full Pipeline (EXP-19)
+- EXP-19: Full optimized system
+
+## Status
+
+**ALL EXPERIMENTS PENDING** — Require real documents and API access.
+`
+  },
+
+  {
+    title: "Benchmark",
+    path: "docs/BENCHMARK.md",
+    icon: "📋",
+    category: "Research",
+    content: `# Benchmark Dataset
+
+## Overview
+
+Financial Document Intelligence Benchmark for evaluating RAG systems on public financial documents.
+
+## Target Size
+- **Minimum**: 200 questions
+- **Ideal**: 300+ questions
+- **Current**: 20 template questions (needs expansion)
+
+## Question Categories
+
+| Category | Description |
+|----------|-------------|
+| Direct Lookup | Single fact from one passage |
+| Numerical | Exact numerical extraction |
+| Temporal | Time-dependent questions |
+| Comparison | Compare metrics across periods |
+| Multi-hop | Combine info from multiple passages |
+| Cross-document | Span multiple documents |
+| Unanswerable | Answer not in documents |
+| Contradictory | Conflicting information |
+| Adversarial | Hallucination/injection tests |
+| Calculation | Arithmetic on extracted values |
+
+## Document Set
+
+**Target**: Public financial documents from SEC EDGAR
+- 10-K annual reports
+- 10-Q quarterly reports
+- Earnings releases
+
+## Important Notes
+
+⚠️ **Template questions must be verified against actual documents before use.**
+
+⚠️ **Gold answers are illustrative — must be replaced with actual values.**
+
+## Status
+
+**TEMPLATE DATASET** — 20 illustrative questions. Needs expansion to 200+ verified questions.
+`
+  },
+
+  {
+    title: "Methodology",
+    path: "docs/METHODOLOGY.md",
+    icon: "🔬",
+    category: "Research",
+    content: `# Methodology
+
+## Research Approach
+
+Systematic experimental methodology to investigate how RAG components affect retrieval quality, factual reliability, latency, and cost.
+
+## Experimental Design
+
+### Independent Variables
+- Retrieval strategy (dense, BM25, hybrid, adaptive)
+- Chunking strategy (fixed, sentence, recursive, structure)
+- Reranking (enabled/disabled)
+- Evidence sufficiency (enabled/disabled)
+- Top-K values (3, 5, 10)
+
+### Dependent Variables
+- Retrieval: Recall@K, MRR, nDCG
+- Generation: Factual correctness, groundedness, hallucination rate
+- Citations: Precision, recall, validation accuracy
+- System: Latency, token usage, cost
+- Abstention: Correct refusal rate, false refusal rate
+
+## Evaluation Protocol
+
+### Retrieval Evaluation
+1. Retrieve top-K candidates
+2. Check if correct source document is in candidates
+3. Check if correct passage is in candidates
+4. Compute Recall@K, MRR, nDCG
+
+### Generation Evaluation
+1. Generate answer with citations
+2. Compare to gold answer
+3. Extract atomic claims
+4. Evaluate each claim against evidence
+5. Compute factual correctness, groundedness
+6. Validate citations
+
+## Reproducibility
+
+Every experiment records:
+- Full configuration snapshot
+- Dataset version
+- Model versions
+- Timestamp
+- Git commit SHA
+
+## Limitations of Methodology
+
+1. **Heuristic evaluation**: Uses support-level as proxy
+2. **Small sample**: 20 questions insufficient
+3. **Single domain**: Financial documents only
+4. **No human evaluation**: All metrics automated
+
+## Status
+
+**METHODOLOGY COMPLETE** — Ready for execution with real data.
+`
+  },
+
+  {
+    title: "Final Audit",
+    path: "docs/PROJECT_AUDIT_FINAL.md",
+    icon: "✅",
+    category: "Audit",
+    content: `# Project Audit — Final
+
+## A. What Was Already Strong
+- Modular architecture with clean interfaces
+- Multiple chunking strategies implemented
+- Hybrid retrieval (dense + BM25 + RRF) implemented
+- Cross-encoder reranking implemented
+- Citation validation framework
+- Experiment runner with configuration snapshots
+- Docker and CI/CD infrastructure
+
+## B. What Was Broken
+- Missing numerical reasoning module
+- Missing temporal reasoning module
+- Missing claim-level faithfulness evaluation
+- Missing observability/tracing
+- Benchmark dataset was only a template
+- No security test suite
+- Missing key documentation
+
+## C. What Was Implemented
+- ✅ Numerical reasoning module
+- ✅ Temporal reasoning module
+- ✅ Claim extraction and faithfulness evaluation
+- ✅ Observability and tracing
+- ✅ Financial benchmark dataset (20 template questions)
+- ✅ Security test suite
+- ✅ RESEARCH_QUESTION.md with explicit hypotheses
+- ✅ LIMITATIONS.md with honest assessment
+- ✅ FINDINGS.md, RESULTS.md, EXPERIMENTS.md, BENCHMARK.md, METHODOLOGY.md
+
+## D. What Was Tested
+- ✅ Chunking strategies (unit tests exist)
+- ✅ RRF fusion (unit tests exist)
+- ✅ Configuration validation (unit tests exist)
+- ✅ Security input validation (new tests added)
+- ✅ Prompt injection detection (new tests added)
+- ❌ End-to-end integration tests (not yet executed)
+
+## E. What Was Measured
+**NOTHING YET.** All measurements require real documents and API access.
+
+## F. Actual Results
+**RESULTS PENDING** — No experiments have been executed.
+
+## G. Major Failures Discovered
+1. No numerical reasoning (LLM arithmetic hallucination risk)
+2. No temporal reasoning (wrong-period retrieval)
+3. No claim-level evaluation (too coarse)
+4. No tracing (cannot debug decisions)
+5. No security tests (vulnerabilities not tested)
+6. Benchmark too small (20 questions insufficient)
+
+## M. Remaining Weaknesses
+1. **No experimental results** — entire research contribution unvalidated
+2. **Benchmark too small** — needs 200+ verified questions
+3. **Evaluation heuristic** — needs LLM-as-judge or human annotation
+4. **Single embedding model** — only MiniLM tested
+5. **Single LLM** — only GPT-4o-mini tested
+6. **PDF-only** — no other document formats
+7. **No OCR** — scanned documents not handled
+8. **No statistical analysis** — confidence intervals not computed
+9. **No human evaluation** — all metrics automated
+10. **No stress testing** — scalability unproven
+
+## Final Assessment
+
+**Engineering Quality**: 8/10 — Clean, modular, well-documented code
+**Research Quality**: 4/10 — Strong framework, no results
+**Real-World Readiness**: 3/10 — Architecture sound, unvalidated
+**Reproducibility**: 9/10 — Excellent infrastructure, no results to reproduce
+
+**Overall**: Well-engineered research infrastructure. Architecture is sound, code is clean, experimental methodology is rigorous. However, **the central research contribution is completely unvalidated.**
+
+The project is ready for someone to obtain real financial documents, populate the benchmark, run experiments, and discover actual findings.
+`
+  },
 ];
