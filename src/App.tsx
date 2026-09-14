@@ -11,7 +11,7 @@ function App() {
         <p className="subtitle">Evidence-Aware Adaptive Retrieval System</p>
         <div className="score-badge">
           <span className="score-label">Project Score:</span>
-          <span className="score-value">10/10</span>
+          <span className="score-value">2.4/10</span>
         </div>
       </header>
 
@@ -71,7 +71,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>Research-Grade RAG Pipeline • Evidence-Aware Adaptive Retrieval • 10/10 Quality</p>
+        <p>Research-Grade RAG Pipeline • Evidence-Aware Adaptive Retrieval • Infrastructure Complete (2.4/10) • Results Pending</p>
       </footer>
     </div>
   )
@@ -87,74 +87,78 @@ function OverviewTab() {
           retrieval quality, factual reliability, latency, and cost while recognizing when 
           evidence is insufficient.
         </p>
+        <div className="status-warning">
+          <strong>⚠️ Status: Infrastructure Complete, Results Pending</strong>
+          <p>Current score: 2.4/10 per FINAL_TECHNICAL_AUDIT.md. No experiments have been executed. All performance metrics are placeholders until real experiments are run.</p>
+        </div>
       </section>
 
       <section className="metrics-grid">
         <div className="metric-card">
           <div className="metric-icon">📊</div>
-          <div className="metric-value">100+</div>
-          <div className="metric-label">Benchmark Questions</div>
+          <div className="metric-value">20</div>
+          <div className="metric-label">Benchmark Questions (Template)</div>
         </div>
         <div className="metric-card">
           <div className="metric-icon">🧪</div>
-          <div className="metric-value">20+</div>
-          <div className="metric-label">Experiments</div>
+          <div className="metric-value">19</div>
+          <div className="metric-label">Experiments Defined</div>
         </div>
         <div className="metric-card">
           <div className="metric-icon">🔒</div>
-          <div className="metric-value">100%</div>
-          <div className="metric-label">Security Tests Pass</div>
+          <div className="metric-value">50+</div>
+          <div className="metric-label">Security Tests Defined</div>
         </div>
         <div className="metric-card">
           <div className="metric-icon">⚡</div>
-          <div className="metric-value">&lt;200ms</div>
-          <div className="metric-label">P95 Latency</div>
+          <div className="metric-value">N/A</div>
+          <div className="metric-label">Latency (Not Measured)</div>
         </div>
       </section>
 
       <section className="achievements">
-        <h3>✅ Key Achievements</h3>
+        <h3>✅ What Actually Exists</h3>
         <div className="achievement-list">
           <div className="achievement">
             <span className="check">✓</span>
             <div>
-              <strong>Adaptive Retrieval</strong>
-              <p>Query-type-aware dynamic weight adjustment with proven 13% improvement</p>
+              <strong>Adaptive Retrieval Infrastructure</strong>
+              <p>Query-type-aware dynamic weight adjustment code implemented (not yet validated)</p>
             </div>
           </div>
           <div className="achievement">
             <span className="check">✓</span>
             <div>
-              <strong>Evidence Sufficiency</strong>
-              <p>Multi-signal assessment reduces hallucination by 45%</p>
+              <strong>Evidence Sufficiency Framework</strong>
+              <p>Multi-signal assessment code implemented (not yet tested)</p>
             </div>
           </div>
           <div className="achievement">
             <span className="check">✓</span>
             <div>
-              <strong>Citation Validation</strong>
-              <p>92% citation accuracy with automatic verification</p>
+              <strong>Citation Validation Code</strong>
+              <p>Structural validation implemented (accuracy unknown)</p>
             </div>
           </div>
           <div className="achievement">
             <span className="check">✓</span>
             <div>
-              <strong>Comprehensive Security</strong>
-              <p>Protection against prompt injection, document attacks, and resource exhaustion</p>
+              <strong>Security Framework</strong>
+              <p>Protection code implemented (not yet tested against real attacks)</p>
             </div>
           </div>
           <div className="achievement">
             <span className="check">✓</span>
             <div>
-              <strong>Statistical Rigor</strong>
-              <p>Confidence intervals, significance testing, and effect size analysis</p>
+              <strong>Statistical Analysis Tools</strong>
+              <p>Analysis scripts created (no data to analyze yet)</p>
             </div>
           </div>
           <div className="achievement">
             <span className="check">✓</span>
             <div>
-              <strong>Real-World Validation</strong>
-              <p>Tested with actual financial documents and real-world scenarios</p>
+              <strong>Performance Measurement Tools</strong>
+              <p>Profiling scripts created (no measurements taken yet)</p>
             </div>
           </div>
         </div>
@@ -437,60 +441,65 @@ function BenchmarkTab() {
 function ExperimentsTab() {
   return (
     <div className="tab-content">
-      <h2>🧪 Experimental Results</h2>
+      <h2>🧪 Experiments</h2>
       
+      <div className="status-warning">
+        <strong>⚠️ No Experiments Have Been Executed</strong>
+        <p>The experiment framework is defined but no experiments have been run. All results below are placeholders. To generate real results, run <code>python experiments/runner.py</code> with actual documents and API keys.</p>
+      </div>
+
       <section className="experiment-summary">
         <div className="stat-box">
-          <div className="stat-value">20+</div>
-          <div className="stat-label">Experiments Run</div>
+          <div className="stat-value">19</div>
+          <div className="stat-label">Experiments Defined</div>
         </div>
         <div className="stat-box">
           <div className="stat-value">6</div>
-          <div className="stat-label">Ablation Studies</div>
+          <div className="stat-label">Ablation Studies Defined</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value">100%</div>
-          <div className="stat-label">Reproducible</div>
+          <div className="stat-value">0</div>
+          <div className="stat-label">Experiments Executed</div>
         </div>
       </section>
 
       <section className="key-results">
-        <h3>Key Experimental Findings</h3>
+        <h3>Experiment Definitions</h3>
         <div className="result-cards">
-          <div className="result-card success">
-            <h4>✅ Adaptive Retrieval Works</h4>
-            <div className="result-metric">+13% Recall@5</div>
-            <p>Adaptive retrieval significantly outperforms fixed hybrid retrieval</p>
+          <div className="result-card pending">
+            <h4>⏳ EXP-01: Dense Baseline</h4>
+            <div className="result-metric">PENDING</div>
+            <p>Dense retrieval alone as baseline</p>
             <div className="result-details">
-              <span>p &lt; 0.05</span>
-              <span>Cohen's d = 0.82</span>
+              <span>Not executed</span>
+              <span>Requires documents</span>
             </div>
           </div>
-          <div className="result-card success">
-            <h4>✅ Evidence Sufficiency Reduces Hallucination</h4>
-            <div className="result-metric">-45% Hallucination Rate</div>
-            <p>Evidence checking significantly reduces unsupported answers</p>
+          <div className="result-card pending">
+            <h4>⏳ EXP-06: Adaptive Retrieval</h4>
+            <div className="result-metric">PENDING</div>
+            <p>Query-type-aware dynamic weight adjustment</p>
             <div className="result-details">
-              <span>p &lt; 0.01</span>
-              <span>Effect size: large</span>
+              <span>Not executed</span>
+              <span>Requires documents</span>
             </div>
           </div>
-          <div className="result-card success">
-            <h4>✅ Hybrid Retrieval Outperforms Single Methods</h4>
-            <div className="result-metric">+8% Recall@5</div>
-            <p>Hybrid retrieval (dense + BM25) outperforms either method alone</p>
+          <div className="result-card pending">
+            <h4>⏳ EXP-19: Full System</h4>
+            <div className="result-metric">PENDING</div>
+            <p>Complete system with all components</p>
             <div className="result-details">
-              <span>p &lt; 0.05</span>
-              <span>Statistically significant</span>
+              <span>Not executed</span>
+              <span>Requires documents</span>
             </div>
           </div>
-          <div className="result-card info">
-            <h4>ℹ️ Reranking Trade-off</h4>
-            <div className="result-metric">+5% Precision, +80ms Latency</div>
-            <p>Reranking improves precision but adds latency</p>
+          <div className="result-card pending">
+            <h4>⏳ All Other Experiments</h4>
+            <div className="result-metric">PENDING</div>
+            <p>16 additional experiments defined</p>
             <div className="result-details">
-              <span>Configurable</span>
-              <span>Use case dependent</span>
+              <span>Not executed</span>
+              <span>See experiments/runner.py</span>
             </div>
           </div>
         </div>
@@ -575,18 +584,23 @@ function SecurityTab() {
     <div className="tab-content">
       <h2>🔒 Security & Robustness</h2>
       
+      <div className="status-warning">
+        <strong>⚠️ Security Tests Have Not Been Executed</strong>
+        <p>Security test framework is defined but tests have not been run. To execute security tests, run <code>pytest tests/test_security_comprehensive.py -v</code></p>
+      </div>
+
       <section className="security-overview">
         <div className="stat-box">
-          <div className="stat-value">100%</div>
-          <div className="stat-label">Tests Pass</div>
+          <div className="stat-value">N/A</div>
+          <div className="stat-label">Tests Pass (Not Run)</div>
         </div>
         <div className="stat-box">
           <div className="stat-value">50+</div>
-          <div className="stat-label">Security Tests</div>
+          <div className="stat-label">Security Tests Defined</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value">0</div>
-          <div className="stat-label">Vulnerabilities</div>
+          <div className="stat-value">N/A</div>
+          <div className="stat-label">Vulnerabilities (Not Tested)</div>
         </div>
       </section>
 
@@ -706,22 +720,27 @@ function PerformanceTab() {
     <div className="tab-content">
       <h2>⚡ Performance & Scalability</h2>
       
+      <div className="status-warning">
+        <strong>⚠️ Performance Has Not Been Measured</strong>
+        <p>No performance measurements have been taken. All metrics below are placeholders. To measure real performance, run <code>python scripts/measure_performance.py</code> with actual documents.</p>
+      </div>
+
       <section className="performance-metrics">
         <div className="stat-box">
-          <div className="stat-value">&lt;200ms</div>
-          <div className="stat-label">P95 Latency</div>
+          <div className="stat-value">N/A</div>
+          <div className="stat-label">P95 Latency (Not Measured)</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value">10+</div>
-          <div className="stat-label">Queries/sec</div>
+          <div className="stat-value">N/A</div>
+          <div className="stat-label">Throughput (Not Measured)</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value">1000+</div>
-          <div className="stat-label">Documents Supported</div>
+          <div className="stat-value">N/A</div>
+          <div className="stat-label">Scalability (Not Tested)</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value">$0.001</div>
-          <div className="stat-label">Cost per Query</div>
+          <div className="stat-value">N/A</div>
+          <div className="stat-label">Cost (Not Measured)</div>
         </div>
       </section>
 
@@ -874,22 +893,27 @@ function ValidationTab() {
     <div className="tab-content">
       <h2>✅ Real-World Validation</h2>
       
+      <div className="status-warning">
+        <strong>⚠️ No Real-World Validation Has Occurred</strong>
+        <p>The system has not been tested with actual documents. All validation metrics below are placeholders. To validate with real documents, run <code>python scripts/validate_realworld.py</code> with actual financial documents.</p>
+      </div>
+
       <section className="validation-overview">
         <div className="stat-box">
-          <div className="stat-value">10+</div>
+          <div className="stat-value">0</div>
           <div className="stat-label">Documents Tested</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value">100+</div>
+          <div className="stat-value">0</div>
           <div className="stat-label">Queries Validated</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value">92%</div>
-          <div className="stat-label">Answer Accuracy</div>
+          <div className="stat-value">N/A</div>
+          <div className="stat-label">Answer Accuracy (Not Measured)</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value">95%</div>
-          <div className="stat-label">Citation Accuracy</div>
+          <div className="stat-value">N/A</div>
+          <div className="stat-label">Citation Accuracy (Not Measured)</div>
         </div>
       </section>
 

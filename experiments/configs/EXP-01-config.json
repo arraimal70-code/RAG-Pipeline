@@ -1,0 +1,60 @@
+{
+  "experiment_id": "EXP-01",
+  "name": "Dense Retrieval Baseline",
+  "description": "Baseline experiment using only dense (semantic) retrieval",
+  "hypothesis": "Dense retrieval provides good semantic matching but may miss exact matches",
+  "configuration": {
+    "retrieval_method": "dense",
+    "dense_top_k": 50,
+    "bm25_top_k": 0,
+    "rerank_enabled": false,
+    "adaptive_enabled": false,
+    "chunk_strategy": "recursive",
+    "chunk_size": 512,
+    "chunk_overlap": 64,
+    "embedding_model": "all-MiniLM-L6-v2",
+    "llm_model": "gpt-4o-mini",
+    "temperature": 0.0,
+    "random_seed": 42
+  },
+  "dataset": {
+    "benchmark_file": "benchmarks/comprehensive_benchmark.json",
+    "benchmark_version": "2.0.0",
+    "total_questions": 20,
+    "answerable_questions": 18,
+    "unanswerable_questions": 2
+  },
+  "metrics_to_collect": [
+    "recall_at_1",
+    "recall_at_3",
+    "recall_at_5",
+    "recall_at_10",
+    "mrr",
+    "ndcg_at_5",
+    "precision_at_5",
+    "hit_rate",
+    "latency_p50_ms",
+    "latency_p95_ms",
+    "latency_p99_ms",
+    "throughput_qps",
+    "embedding_tokens",
+    "generation_input_tokens",
+    "generation_output_tokens",
+    "total_cost_usd"
+  ],
+  "raw_data_to_preserve": [
+    "query_id",
+    "query_text",
+    "classified_query_type",
+    "retrieved_chunk_ids",
+    "retrieved_scores",
+    "generated_answer",
+    "citations",
+    "latency_ms",
+    "token_usage"
+  ],
+  "execution_command": "python experiments/runner.py --experiment EXP-01",
+  "expected_output_file": "experiments/results/EXP-01-{timestamp}.json",
+  "status": "DEFINED_NOT_EXECUTED",
+  "notes": "This configuration defines what will be measured when the experiment is executed. No results exist yet."
+}
