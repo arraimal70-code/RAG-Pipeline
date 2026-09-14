@@ -4,6 +4,7 @@ Production-ready evaluation framework with comprehensive metrics.
 
 import logging
 import json
+import math
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -198,20 +199,93 @@ class Evaluator:
         question: BenchmarkQuestion,
         response: QueryResponse,
     ) -> RetrievalMetrics:
-        """Evaluate retrieval quality."""
-        # This is a placeholder - actual implementation would need
-        # access to retrieved chunks and ground truth
-        # For now, return default metrics
+        """
+        Evaluate retrieval quality by comparing retrieved chunks against ground truth.
+        
+        Requires:
+        - question.relevant_chunk_ids: list of ground truth chunk IDs
+        - response.retrieval_metadata: must contain 'retrieved_chunk_ids' list
+        
+        If ground truth or retrieved chunks are not available, returns zeros
+        with a warning logged.
+        """
+        # Get ground truth relevant chunks
+        relevant_ids = set(question.relevant_chunk_ids) if question.relevant_chunk_ids else set()
+        
+        # Get retrieved chunk IDs from response metadata
+        retrieved_chunk_ids = []
+        if hasattr(response, 'retrieval_metadata') and response.retrieval_metadata:
+            retrieved_chunk_ids = response.retrieval_metadata.get('retrieved_chunk_ids', [])
+        
+        # If we don't have the data needed, log warning and return zeros
+        if not relevant_ids:
+            logger.warning(
+                f"Question {question.question_id} has no relevant_chunk_ids. "
+                f"Cannot compute retrieval metrics."
+            )
+            return RetrievalMetrics()
+        
+        if not retrieved_chunk_ids:
+            logger.warning(
+                f"Response for {question.question_id} has no retrieved_chunk_ids in metadata. "
+                f"Cannot compute retrieval metrics."
+            )
+            return RetrievalMetrics()
+        
+        # Convert to sets for comparison
+        retrieved_set = set(retrieved_chunk_ids)
+        
+        # Compute Recall@K
+        def recall_at_k(k: int) -> float:
+            retrieved_k = set(retrieved_chunk_ids[:k])
+            if not relevant_ids:
+                return 0.0
+            hits = len(relevant_ids & retrieved_k)
+            return hits / len(relevant_ids)
+        
+        # Compute MRR (Mean Reciprocal Rank)
+        def compute_mrr() -> float:
+            for i, chunk_id in enumerate(retrieved_chunk_ids, 1):
+                if chunk_id in relevant_ids:
+                    return 1.0 / i
+            return 0.0
+        
+        # Compute NDCG@K
+        def compute_ndcg_at_k(k: int) -> float:
+            # DCG: sum of relevance / log2(rank + 1)
+            dcg = 0.0
+            for i, chunk_id in enumerate(retrieved_chunk_ids[:k], 1):
+                relevance = 1.0 if chunk_id in relevant_ids else 0.0
+                dcg += relevance / math.log2(i + 1)
+            
+            # Ideal DCG: all relevant items at top
+            ideal_relevant = min(len(relevant_ids), k)
+            idcg = sum(1.0 / math.log2(i + 1) for i in range(1, ideal_relevant + 1))
+            
+            return dcg / idcg if idcg > 0 else 0.0
+        
+        # Compute Precision@5
+        def precision_at_k(k: int) -> float:
+            retrieved_k = retrieved_chunk_ids[:k]
+            if not retrieved_k:
+                return 0.0
+            hits = sum(1 for cid in retrieved_k if cid in relevant_ids)
+            return hits / len(retrieved_k)
+        
+        # Compute Hit Rate (any relevant chunk in top-K)
+        def hit_rate_at_k(k: int) -> float:
+            retrieved_k = set(retrieved_chunk_ids[:k])
+            return 1.0 if relevant_ids & retrieved_k else 0.0
         
         return RetrievalMetrics(
-            recall_at_1=0.0,
-            recall_at_3=0.0,
-            recall_at_5=0.0,
-            recall_at_10=0.0,
-            mrr=0.0,
-            ndcg_at_5=0.0,
-            precision_at_5=0.0,
-            hit_rate=0.0,
+            recall_at_1=recall_at_k(1),
+            recall_at_3=recall_at_k(3),
+            recall_at_5=recall_at_k(5),
+            recall_at_10=recall_at_k(10),
+            mrr=compute_mrr(),
+            ndcg_at_5=compute_ndcg_at_k(5),
+            precision_at_5=precision_at_k(5),
+            hit_rate=hit_rate_at_k(10),
         )
     
     def _evaluate_generation(
@@ -248,24 +322,76 @@ class Evaluator:
         question: BenchmarkQuestion,
         response: QueryResponse,
     ) -> CitationMetrics:
-        """Evaluate citation quality."""
+        """
+        Evaluate citation quality by comparing citations against ground truth.
+        
+        Citation Precision: fraction of citations that are correct
+        Citation Recall: fraction of ground truth sources that were cited
+        Citation Completeness: whether all necessary evidence was cited
+        Citation Entailment: whether cited evidence actually supports the claim
+        """
         if not response.citations:
-            return CitationMetrics()
+            # No citations provided
+            if hasattr(question, 'gold_sources') and question.gold_sources:
+                # Ground truth exists but no citations - recall is 0
+                return CitationMetrics(
+                    citation_precision=0.0,
+                    citation_recall=0.0,
+                    citation_completeness=0.0,
+                    citation_entailment=0.0,
+                )
+            else:
+                # No ground truth and no citations - perfect (no citations needed)
+                return CitationMetrics(
+                    citation_precision=1.0,
+                    citation_recall=1.0,
+                    citation_completeness=1.0,
+                    citation_entailment=1.0,
+                )
         
-        # Simple validation - check if citations exist
-        # In production, would validate against ground truth
+        # Get ground truth sources
+        gold_sources = set()
+        if hasattr(question, 'gold_sources') and question.gold_sources:
+            gold_sources = set(question.gold_sources)
         
-        num_citations = len(response.citations)
-        expected_citations = len(question.gold_sources) if hasattr(question, 'gold_sources') else 1
+        # Get cited sources from response
+        cited_sources = set()
+        for citation in response.citations:
+            # Extract source document from citation
+            if hasattr(citation, 'source') and citation.source:
+                cited_sources.add(citation.source)
+            elif hasattr(citation, 'document') and citation.document:
+                cited_sources.add(citation.document)
         
-        precision = min(1.0, num_citations / max(expected_citations, 1))
-        recall = min(1.0, num_citations / max(expected_citations, 1))
+        # If no ground truth, we can only measure precision (all citations are "correct")
+        if not gold_sources:
+            return CitationMetrics(
+                citation_precision=1.0,  # Can't verify, assume correct
+                citation_recall=1.0,     # No ground truth to measure against
+                citation_completeness=1.0,
+                citation_entailment=response.confidence if hasattr(response, 'confidence') else 0.5,
+            )
+        
+        # Compute precision: how many citations are correct?
+        correct_citations = len(cited_sources & gold_sources)
+        precision = correct_citations / len(cited_sources) if cited_sources else 0.0
+        
+        # Compute recall: how many ground truth sources were cited?
+        recall = correct_citations / len(gold_sources) if gold_sources else 0.0
+        
+        # Compute completeness: did we cite all necessary sources?
+        completeness = recall  # Same as recall for now
+        
+        # Compute entailment: do citations actually support the answer?
+        # This is a heuristic - in production would use NLI model
+        # For now, use confidence as proxy
+        entailment = response.confidence if hasattr(response, 'confidence') else 0.5
         
         return CitationMetrics(
             citation_precision=precision,
             citation_recall=recall,
-            citation_completeness=precision,
-            citation_entailment=response.confidence,
+            citation_completeness=completeness,
+            citation_entailment=entailment,
         )
     
     def aggregate_results(
