@@ -35,6 +35,7 @@ from src.indexing.vector_store import VectorIndex
 from src.indexing.bm25_index import BM25Index
 from src.adaptive.query_analyzer import QueryAnalyzer
 from src.retrieval.hybrid_retriever import HybridRetriever
+from src.adaptive.policy import policy_generator
 from src.reasoning.numerical import NumericalReasoner
 from src.reasoning.temporal import TemporalReasoner
 from src.evidence.sufficiency import EvidenceSufficiencyChecker
@@ -156,16 +157,23 @@ class RAGPipeline:
             # Stage 1: Query analysis
             stage_start = time.time()
             query_type = self.query_analyzer.classify(question)
+            
+            # CRITICAL: Generate retrieval policy based on query type
+            # This is what makes adaptive retrieval actually work
+            policy = policy_generator.generate_policy(query_type, question)
+            
             trace.add_event("query_analysis", {
                 "query_type": query_type.value,
+                "policy": policy.to_dict(),
             }, latency_ms=(time.time() - stage_start) * 1000)
 
-            # Stage 2: Retrieval
+            # Stage 2: Retrieval with adaptive policy
             stage_start = time.time()
-            retrieval = self.retriever.retrieve(question)
+            retrieval = self.retriever.retrieve(question, policy=policy)
             trace.add_event("retrieval", {
                 "num_candidates": retrieval.total_candidates,
                 "method_details": retrieval.method_details,
+                "adaptive": True,
             }, latency_ms=retrieval.retrieval_latency_ms)
 
             # Stage 3: Temporal filtering
