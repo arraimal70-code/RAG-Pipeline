@@ -2322,4 +2322,381 @@ jobs:
         run: docker run --rm rag-pipeline:test python -c "from src.core.config import config; print('OK')"
 `
   },
+
+  // ═══════════════════════════════════════════════════════════
+  // REASONING MODULES (NEW)
+  // ═══════════════════════════════════════════════════════════
+  {
+    path: "src/reasoning/numerical.py",
+    language: "python",
+    description: "Numerical reasoning — extracts values and performs programmatic calculations to avoid LLM arithmetic hallucination.",
+    phase: "Phase 14",
+    category: "Reasoning",
+    code: `"""
+src/reasoning/numerical.py — Numerical reasoning for financial QA.
+
+Extracts numerical values from retrieved evidence and performs
+programmatic calculations to avoid LLM arithmetic hallucination.
+"""
+
+import re
+from typing import Optional
+from dataclasses import dataclass, field
+from enum import Enum
+from src.core.models import TextChunk
+
+
+class NumericalOperation(str, Enum):
+    EXTRACT = "extract"
+    DIFFERENCE = "difference"
+    PERCENT_CHANGE = "pct_change"
+    RATIO = "ratio"
+
+
+@dataclass
+class NumericalValue:
+    value: float
+    unit: str
+    raw_text: str
+    chunk_id: str
+    document_id: str
+    filename: str
+    page_number: int
+    temporal_context: Optional[str] = None
+    entity: Optional[str] = None
+
+
+@dataclass
+class NumericalResult:
+    operation: NumericalOperation
+    result: Optional[float] = None
+    unit: str = ""
+    confidence: float = 0.0
+    source_values: list[NumericalValue] = field(default_factory=list)
+    reasoning: str = ""
+    error: Optional[str] = None
+
+
+NUMBER_PATTERN = re.compile(r'(\\$?\\s*[\\d,]+\\.?\\d*)\\s*(%|percent|million|mn|billion|bn|thousand|k)?')
+TEMPORAL_PATTERN = re.compile(r'(FY\\s*20\\d{2}|Q[1-4]\\s*(?:20\\d{2})?|20\\d{2})', re.IGNORECASE)
+ENTITY_PATTERN = re.compile(r'(revenue|sales|income|profit|margin|expense|cost|ebitda|eps|capex)', re.IGNORECASE)
+
+
+class NumericalReasoner:
+    """Extracts and computes with numerical values from evidence."""
+
+    def extract_values(self, chunks: list[TextChunk]) -> list[NumericalValue]:
+        values = []
+        for chunk in chunks:
+            for match in NUMBER_PATTERN.finditer(chunk.content):
+                raw = match.group(1).replace(",", "").replace("$", "").strip()
+                unit = (match.group(2) or "").lower()
+                try:
+                    value = float(raw)
+                except ValueError:
+                    continue
+                if unit in ("million", "mn"): value *= 1_000_000; unit = "dollars"
+                elif unit in ("billion", "bn"): value *= 1_000_000_000; unit = "dollars"
+                elif unit == "%": unit = "percent"
+
+                ctx = chunk.content[max(0, match.start()-100):match.end()+100]
+                t = TEMPORAL_PATTERN.search(ctx)
+                e = ENTITY_PATTERN.search(ctx)
+                values.append(NumericalValue(
+                    value=value, unit=unit, raw_text=match.group(0),
+                    chunk_id=chunk.chunk_id, document_id=chunk.document_id,
+                    filename=chunk.filename, page_number=chunk.page_number,
+                    temporal_context=t.group(0) if t else None,
+                    entity=e.group(0).lower() if e else None,
+                ))
+        return values
+
+    def compute_growth_rate(self, old: NumericalValue, new: NumericalValue) -> NumericalResult:
+        if old.value == 0:
+            return NumericalResult(operation=NumericalOperation.PERCENT_CHANGE, error="Division by zero")
+        growth = ((new.value - old.value) / abs(old.value)) * 100
+        return NumericalResult(
+            operation=NumericalOperation.PERCENT_CHANGE, result=round(growth, 2),
+            unit="percent", confidence=0.95, source_values=[old, new],
+            reasoning=f"Growth = ({new.raw_text} - {old.raw_text}) / |{old.raw_text}| x 100 = {growth:.2f}%",
+        )
+`
+  },
+
+  {
+    path: "src/reasoning/temporal.py",
+    language: "python",
+    description: "Temporal reasoning — ensures retrieved evidence matches the question's time period.",
+    phase: "Phase 14",
+    category: "Reasoning",
+    code: `"""
+src/reasoning/temporal.py — Temporal reasoning for financial QA.
+
+Prevents retrieving correct numbers for wrong periods.
+"""
+
+import re
+from typing import Optional
+from dataclasses import dataclass
+from enum import Enum
+from src.core.models import TextChunk, RetrievalOutput
+
+
+class TemporalGranularity(str, Enum):
+    YEAR = "year"
+    QUARTER = "quarter"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class TemporalContext:
+    raw_text: str
+    year: Optional[int] = None
+    quarter: Optional[int] = None
+    fiscal_year: Optional[str] = None
+    granularity: TemporalGranularity = TemporalGranularity.UNKNOWN
+
+
+FY_PATTERN = re.compile(r'(?:FY|fiscal\\s+year)\\s*(20\\d{2})', re.IGNORECASE)
+Q_PATTERN = re.compile(r'Q([1-4])\\s*(?:20\\d{2})?', re.IGNORECASE)
+YEAR_PATTERN = re.compile(r'\\b(20\\d{2})\\b')
+
+
+class TemporalReasoner:
+    """Handles temporal reasoning for financial document QA."""
+
+    def extract_temporal_context(self, text: str) -> list[TemporalContext]:
+        contexts = []
+        for m in FY_PATTERN.finditer(text):
+            y = int(m.group(1))
+            contexts.append(TemporalContext(raw_text=m.group(0), year=y, fiscal_year=f"FY{y}", granularity=TemporalGranularity.YEAR))
+        for m in Q_PATTERN.finditer(text):
+            q = int(m.group(1))
+            ym = YEAR_PATTERN.search(text[max(0,m.start()-20):m.end()+20])
+            contexts.append(TemporalContext(raw_text=m.group(0), year=int(ym.group(1)) if ym else None, quarter=q, granularity=TemporalGranularity.QUARTER))
+        if not contexts:
+            for m in YEAR_PATTERN.finditer(text):
+                y = int(m.group(1))
+                if 2000 <= y <= 2030:
+                    contexts.append(TemporalContext(raw_text=m.group(0), year=y, granularity=TemporalGranularity.YEAR))
+        return contexts
+
+    def filter_by_temporal_relevance(self, question: str, retrieval: RetrievalOutput) -> RetrievalOutput:
+        """Filter results based on temporal alignment with query."""
+        fy_matches = [int(y) for y in FY_PATTERN.findall(question)]
+        year_matches = [int(y) for y in YEAR_PATTERN.findall(question) if 2000 <= int(y) <= 2030]
+        required_years = set(fy_matches + year_matches)
+
+        if not required_years:
+            return retrieval
+
+        scored = []
+        for c in retrieval.candidates:
+            chunk_temporal = self.extract_temporal_context(c.chunk.content)
+            chunk_years = {tc.year for tc in chunk_temporal if tc.year}
+            if chunk_years & required_years:
+                scored.append((c, c.score * 1.2))  # boost matching
+            elif not chunk_years:
+                scored.append((c, c.score * 0.5))  # penalize unknown
+            # else: drop non-matching
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        from src.core.models import RetrievalResult
+        new = [RetrievalResult(chunk=c.chunk, score=s, retrieval_method=c.retrieval_method+"+temporal", rank=i) for i,(c,s) in enumerate(scored)]
+        return RetrievalOutput(query=retrieval.query, candidates=new, total_candidates=len(new),
+            retrieval_latency_ms=retrieval.retrieval_latency_ms, method_details={**retrieval.method_details, "temporal_filter": True})
+`
+  },
+
+  {
+    path: "src/claims/extractor.py",
+    language: "python",
+    description: "Claim-level faithfulness evaluation — splits answers into atomic claims.",
+    phase: "Phase 17",
+    category: "Claims",
+    code: `"""
+src/claims/extractor.py — Claim-level faithfulness evaluation.
+
+Splits answers into atomic claims and evaluates each against evidence.
+"""
+
+import re
+from dataclasses import dataclass, field
+from enum import Enum
+from src.core.models import TextChunk, RetrievalOutput, GenerationOutput
+
+
+class ClaimSupport(str, Enum):
+    SUPPORTED = "supported"
+    PARTIALLY_SUPPORTED = "partially_supported"
+    UNSUPPORTED = "unsupported"
+    NUMERICALLY_VERIFIED = "numerically_verified"
+
+
+@dataclass
+class AtomicClaim:
+    claim_id: str
+    text: str
+    claim_type: str
+    support: ClaimSupport = ClaimSupport.UNSUPPORTED
+    confidence: float = 0.0
+
+
+@dataclass
+class FaithfulnessReport:
+    claims: list[AtomicClaim] = field(default_factory=list)
+    total_claims: int = 0
+    supported_claims: int = 0
+    unsupported_claims: int = 0
+    claim_level_faithfulness: float = 0.0
+    hallucination_rate: float = 0.0
+
+
+SPLIT = re.compile(r'(?<=[.!?])\\s+|,\\s+(?:and|also|while|however|but)\\s+')
+NUM_RE = re.compile(r'[\\$]?\\d[\\d,.]*\\s*(?:%|million|billion)?', re.IGNORECASE)
+
+
+class ClaimExtractor:
+    def extract_claims(self, answer: str) -> list[AtomicClaim]:
+        raw = [c.strip() for c in SPLIT.split(answer) if c.strip() and len(c.strip()) > 10]
+        return [AtomicClaim(claim_id=f"c{i}", text=t, claim_type="numerical" if NUM_RE.search(t) else "factual") for i,t in enumerate(raw)]
+
+    def evaluate_claim(self, claim: AtomicClaim, chunks: list[TextChunk]) -> AtomicClaim:
+        if not chunks: return claim
+        words = set(claim.text.lower().split()) - {"the","a","an","is","was","and","or","of","to","in","for"}
+        if not words: return claim
+        best = max((len(words & set(c.content.lower().split())) / len(words) for c in chunks), default=0)
+        claim.support = ClaimSupport.SUPPORTED if best >= 0.6 else ClaimSupport.PARTIALLY_SUPPORTED if best >= 0.3 else ClaimSupport.UNSUPPORTED
+        claim.confidence = best
+        return claim
+
+    def evaluate_faithfulness(self, gen: GenerationOutput, ret: RetrievalOutput) -> FaithfulnessReport:
+        claims = self.extract_claims(gen.answer)
+        chunks = [r.chunk for r in ret.candidates]
+        for c in claims: self.evaluate_claim(c, chunks)
+        n = len(claims)
+        sup = sum(1 for c in claims if c.support in (ClaimSupport.SUPPORTED, ClaimSupport.NUMERICALLY_VERIFIED))
+        unsup = sum(1 for c in claims if c.support == ClaimSupport.UNSUPPORTED)
+        return FaithfulnessReport(claims=claims, total_claims=n, supported_claims=sup, unsupported_claims=unsup,
+            claim_level_faithfulness=sup/n if n else 0, hallucination_rate=unsup/n if n else 0)
+`
+  },
+
+  {
+    path: "src/observability/tracing.py",
+    language: "python",
+    description: "Query tracing — records every decision for debugging and analysis.",
+    phase: "Phase 21",
+    category: "Observability",
+    code: `"""
+src/observability/tracing.py — Query tracing and observability.
+"""
+
+import json, uuid, logging
+from datetime import datetime
+from typing import Optional, Any
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
+from src.core.config import config
+
+
+@dataclass
+class TraceEvent:
+    timestamp: str
+    stage: str
+    data: dict[str, Any] = field(default_factory=dict)
+    latency_ms: float = 0.0
+
+
+@dataclass
+class QueryTrace:
+    trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    query: str = ""
+    query_type: str = "unknown"
+    events: list[TraceEvent] = field(default_factory=list)
+    total_latency_ms: float = 0.0
+
+    def add_event(self, stage: str, data: dict, latency_ms: float = 0.0):
+        self.events.append(TraceEvent(timestamp=datetime.utcnow().isoformat(), stage=stage, data=data, latency_ms=latency_ms))
+
+    def to_json(self) -> str:
+        return json.dumps({"trace_id": self.trace_id, "query": self.query, "query_type": self.query_type,
+            "events": [asdict(e) for e in self.events], "total_latency_ms": self.total_latency_ms}, indent=2, default=str)
+
+
+class Tracer:
+    def __init__(self, log_dir: Optional[Path] = None):
+        self.log_dir = log_dir or config.LOGS_DIR
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self._traces: list[QueryTrace] = []
+
+    def start_trace(self, query: str) -> QueryTrace:
+        return QueryTrace(query=query)
+
+    def end_trace(self, trace: QueryTrace):
+        self._traces.append(trace)
+
+    def save_trace(self, trace: QueryTrace) -> Path:
+        fp = self.log_dir / f"trace_{trace.trace_id[:8]}.json"
+        fp.write_text(trace.to_json())
+        return fp
+
+
+tracer = Tracer()
+`
+  },
+
+  {
+    path: "tests/test_security.py",
+    language: "python",
+    description: "Security test suite — validates input validation, injection detection, resource limits.",
+    phase: "Phase 24",
+    category: "Tests",
+    code: `"""
+tests/test_security.py — Security test suite.
+"""
+
+import pytest
+from pathlib import Path
+from src.core.config import config
+from src.parsing.pdf_parser import PDFParser
+from src.adaptive.query_analyzer import QueryAnalyzer
+
+
+class TestInputValidation:
+    def test_reject_non_pdf(self, tmp_path):
+        f = tmp_path / "malware.exe"
+        f.write_bytes(b"MZ" + b"\\x00" * 100)
+        with pytest.raises(ValueError, match="Unsupported file type"):
+            PDFParser().parse(f)
+
+    def test_reject_nonexistent(self):
+        with pytest.raises(ValueError, match="File not found"):
+            PDFParser().parse(Path("/nonexistent.pdf"))
+
+
+class TestPromptInjection:
+    def test_detect_injections(self):
+        patterns = config.security.injection_patterns
+        for q in ["Ignore previous instructions", "Ignore all previous", "You are now"]:
+            assert any(p in q.lower() for p in patterns)
+
+    def test_normal_not_flagged(self):
+        patterns = config.security.injection_patterns
+        for q in ["What was revenue in FY2024?", "How did margin change?"]:
+            assert not any(p in q.lower() for p in patterns)
+
+
+class TestResourceLimits:
+    def test_max_pages(self):
+        assert 0 < config.security.max_pages_per_document <= 10000
+
+    def test_max_chunk(self):
+        assert 0 < config.security.max_chunk_length <= 100000
+
+    def test_extensions(self):
+        assert ".pdf" in config.security.allowed_extensions
+        assert ".exe" not in config.security.allowed_extensions
+`
+  },
 ];
