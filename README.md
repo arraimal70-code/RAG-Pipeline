@@ -1,13 +1,5 @@
 # RAG Pipeline — Evidence-Aware Adaptive Document Intelligence
 
-> **⚠️ HONEST STATUS**: Infrastructure complete. **NO EXPERIMENTS EXECUTED. NO RESULTS EXIST.**
-> 
-> **Current Score**: 2.4/10 (per [RESULT_INTEGRITY_AUDIT.md](docs/RESULT_INTEGRITY_AUDIT.md))
-
-A Retrieval-Augmented Generation (RAG) system infrastructure that investigates how to dynamically balance retrieval quality, factual reliability, citation correctness, latency, and computational cost while recognizing when available evidence is insufficient.
-
----
-
 ## ⚠️ CRITICAL: What Actually Exists
 
 ### ✅ Code Infrastructure (Complete)
