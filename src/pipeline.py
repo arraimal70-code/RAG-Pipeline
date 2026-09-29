@@ -19,13 +19,17 @@ from src.indexing.vector_store import VectorIndex
 from src.indexing.bm25_index import BM25Index
 from src.adaptive.query_analyzer import QueryAnalyzer
 from src.adaptive.policy import policy_generator
+from src.adaptive.query_decomposer import QueryDecomposer
 from src.retrieval.hybrid_retriever import HybridRetriever
+from src.retrieval.hyde import HypotheticalDocumentGenerator
 from src.reasoning.numerical import NumericalReasoner
 from src.reasoning.temporal import TemporalReasoner
 from src.evidence.sufficiency import EvidenceSufficiencyChecker
+from src.evidence.crag import CorrectiveRAGEngine
 from src.generation.generator import Generator
 from src.citations.validator import CitationValidator
 from src.claims.extractor import ClaimExtractor
+from src.cache.semantic_cache import SemanticCache
 from src.observability.tracing import tracer
 from src.security.validator import DocumentValidator, QueryValidator
 
@@ -94,6 +98,12 @@ class RAGPipeline:
         self.generator = Generator()
         self.citation_validator = CitationValidator()
         self.claim_extractor = ClaimExtractor()
+        
+        # Advanced SOTA components
+        self.query_decomposer = QueryDecomposer()
+        self.hyde_generator = HypotheticalDocumentGenerator(self.embedder)
+        self.crag_engine = CorrectiveRAGEngine()
+        self.semantic_cache = SemanticCache(embedder=self.embedder)
         
         # Security
         self.document_validator = DocumentValidator()
@@ -186,12 +196,14 @@ class RAGPipeline:
                 self.error_count += 1
                 raise DocumentIngestionError(f"Document ingestion failed: {e}") from e
     
-    def query(self, question: str) -> QueryResponse:
+    def query(self, question: str, use_cache: bool = True, use_hyde: bool = False) -> QueryResponse:
         """
         Process a query through the full pipeline with comprehensive validation.
         
         Args:
             question: The question to answer
+            use_cache: Whether to check/populate the semantic cache
+            use_hyde: Whether to apply Hypothetical Document Embeddings
             
         Returns:
             QueryResponse with answer, citations, and metadata
@@ -201,6 +213,12 @@ class RAGPipeline:
         """
         if not question or not isinstance(question, str):
             raise QueryProcessingError("Query cannot be empty or non-string")
+
+        # Fast-path: Semantic Cache check (<5ms)
+        if use_cache:
+            cached_resp = self.semantic_cache.get(question)
+            if cached_resp is not None:
+                return cached_resp
             
         query_id = f"query_{self.query_count}_{int(time.time())}"
         self.query_count += 1
@@ -234,7 +252,13 @@ class RAGPipeline:
                 
                 # Stage 3: Retrieval
                 logger.info("Retrieving relevant chunks")
-                retrieval = self.retriever.retrieve(question, policy=policy)
+                if use_hyde:
+                    hyde_emb = self.hyde_generator.generate_hyde_embedding(question)
+                    retrieval = self.retriever.retrieve(question, policy=policy, query_embedding=hyde_emb)
+                    retrieval.method_details["hyde"] = {"enabled": True}
+                else:
+                    retrieval = self.retriever.retrieve(question, policy=policy)
+
                 trace.add_event("retrieval", {
                     "num_candidates": retrieval.total_candidates,
                     "method_details": retrieval.method_details,
@@ -264,6 +288,14 @@ class RAGPipeline:
                     "is_sufficient": evidence_assessment.is_sufficient,
                     "confidence": evidence_assessment.confidence,
                     "recommendation": evidence_assessment.recommendation,
+                })
+
+                # CRAG Knowledge Evaluation
+                crag_assessment = self.crag_engine.evaluate_retrieval(question, retrieval)
+                trace.add_event("crag_evaluation", {
+                    "action": crag_assessment.action.value,
+                    "confidence_score": crag_assessment.confidence_score,
+                    "refined_strips_count": len(crag_assessment.refined_strips),
                 })
                 
                 # Check if we should abstain
@@ -344,9 +376,26 @@ class RAGPipeline:
                         "reasoning": numerical_result.reasoning,
                     }
                 
+                # Stage 10: Self-RAG Reflection Critique
+                self_critique = self.crag_engine.self_reflect_critique(
+                    question, response.answer, [c.chunk for c in retrieval.candidates]
+                )
+                response.retrieval_metadata["crag_action"] = crag_assessment.action.value
+                response.retrieval_metadata["self_rag_critique"] = {
+                    "is_relevant": self_critique.is_relevant,
+                    "is_supported": self_critique.is_supported,
+                    "utility_score": self_critique.utility_score,
+                    "notes": self_critique.critique_notes,
+                }
+
+                # Populate semantic cache if answer is verified and not abstained
+                if use_cache and not response.abstained and response.confidence >= 0.5:
+                    self.semantic_cache.put(question, response)
+
                 trace.add_event("response_assembly", {
                     "abstained": response.abstained,
                     "support_level": response.support_level,
+                    "self_critique": response.retrieval_metadata["self_rag_critique"],
                 })
                 
                 tracer.end_trace(trace)

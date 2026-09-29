@@ -60,6 +60,7 @@ class HybridRetriever:
         self,
         query: str,
         policy: Optional[RetrievalPolicy] = None,
+        query_embedding: Optional[list[float]] = None,
     ) -> RetrievalOutput:
         """
         Full retrieval pipeline with optional adaptive policy.
@@ -99,7 +100,7 @@ class HybridRetriever:
             method_details["adaptive"] = {"mode": "fixed"}
 
         # Stage 1: Dense retrieval
-        dense_results = self._dense_retrieve(query, top_k=dense_top_k)
+        dense_results = self._dense_retrieve(query, top_k=dense_top_k, query_embedding=query_embedding)
         method_details["dense"] = {"candidates": len(dense_results), "top_k": dense_top_k}
 
         # Stage 2: BM25 retrieval
@@ -168,11 +169,17 @@ class HybridRetriever:
     # ──────────────────────────────────────────
     # Stage 1: Dense retrieval
     # ──────────────────────────────────────────
-    def _dense_retrieve(self, query: str, top_k: Optional[int] = None) -> list[dict]:
+    def _dense_retrieve(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        query_embedding: Optional[list[float]] = None,
+    ) -> list[dict]:
         """Semantic similarity search via vector index."""
         if top_k is None:
             top_k = self.cfg.dense_top_k
-        query_embedding = self.embedder.embed_query(query)
+        if query_embedding is None:
+            query_embedding = self.embedder.embed_query(query)
         return self.vector_index.search(query_embedding, top_k=top_k)
 
     # ──────────────────────────────────────────

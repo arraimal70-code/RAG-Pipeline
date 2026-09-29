@@ -213,6 +213,27 @@ for citation in response.citations:
     print(f" - [{citation.citation_id}] {citation.filename} (Page {citation.page_number}): {citation.relevant_text}")
 ```
 
+### Interactive Terminal CLI & Operator Console
+
+The pipeline includes an interactive terminal console with live querying, citation tracing, CRAG action monitoring, and semantic cache telemetry:
+
+```bash
+# Launch interactive REPL
+python src/cli.py
+
+# Or execute a single zero-shot query with HyDE enabled
+python src/cli.py --query "Compare operating margins of Alphabet vs Microsoft in 2024" --hyde
+```
+
+**Console Features:**
+- `/query <question>`: Real-time query execution with color-coded confidence, citations, and latency telemetry.
+- `/ingest <path>`: Live ingestion of PDF, TXT, or Markdown documents with contextual chunking.
+- `/cache`: Inspect semantic cache metrics (lookups, hits, hit rate, LRU count).
+- `/cache-clear`: Flush semantic cache entries.
+- `/stats`: Display vector and BM25 index corpus statistics.
+
+---
+
 ### Running the Quantitative Benchmark CLI
 
 ```bash
@@ -244,10 +265,11 @@ pytest tests/ -v
 | `test_contextual_retrieval.py` | Anthropic situated context prefixing & metadata retention | 2 | **PASS** |
 | `test_query_decomposition.py` | Stanford DSPy-style multi-hop query decomposition | 3 | **PASS** |
 | `test_retrieval.py` | Reciprocal Rank Fusion (RRF) & hybrid interleaving | 6 | **PASS** |
+| `test_sota_extensions.py` | HyDE embeddings, CRAG refinement, Self-RAG critique, Semantic Cache | 10 | **PASS** |
 | `test_security.py` | Prompt injection detection, resource limits, file types | 13 | **PASS** |
 | `test_security_comprehensive.py` | Unicode tricks, path traversal, null bytes, API rate limiting | 20 | **PASS** |
 | `test_integration.py` | End-to-end pipeline, numerical reasoning, empty index | 15 | **PASS** |
-| **Total** | | **92** | **100% Passing** |
+| **Total** | | **102** | **100% Passing** |
 
 ---
 
@@ -274,4 +296,7 @@ If you utilize this architecture in your research or production systems, please 
 1. **Anthropic** (2024). *Contextual Retrieval: Improving Retrieval for AI Applications*. Anthropic Research.
 2. **Min, S., Krishna, K., Lyu, X., Lewis, M., Yih, W., Koh, P. W., Iyyer, M., Zettlemoyer, L., & Hajishirzi, H.** (2023). *FActScore: Fine-grained Atomic Evaluation of Factual Precision in Long Form Text Generation*. EMNLP 2023.
 3. **Khattab, O., et al.** (2023). *DSPy: Compiling Declarative Language Model Calls into State-of-the-Art Pipelines*. Stanford University.
-4. **Cormack, G. V., Clarke, C. L., & Buettcher, S.** (2009). *Reciprocal rank fusion outperforms Condorcet and individual rank learning methods*. SIGIR 2009.
+4. **Gao, L., Dai, X., Pan, F., & Callan, J.** (2023). *Precise Zero-Shot Dense Retrieval without Relevance Labels (HyDE)*. ACL 2023.
+5. **Yan, S., et al.** (2024). *Corrective Retrieval Augmented Generation (CRAG)*. arXiv:2401.15884.
+6. **Asai, A., et al.** (2024). *Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection*. ICLR 2024.
+7. **Cormack, G. V., Clarke, C. L., & Buettcher, S.** (2009). *Reciprocal rank fusion outperforms Condorcet and individual rank learning methods*. SIGIR 2009.
