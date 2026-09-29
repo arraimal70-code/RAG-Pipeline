@@ -14,7 +14,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-class ConfigValidationError(Exception):
+class ConfigValidationError(ValueError):
     """Raised when configuration validation fails."""
     pass
 
@@ -22,24 +22,18 @@ class ConfigValidationError(Exception):
 @dataclass
 class ChunkingConfig:
     """Configuration for document chunking."""
-    strategy: Literal["fixed", "sentence", "recursive", "structure"] = "recursive"
+    strategy: Literal["fixed", "sentence", "recursive", "structure", "contextual"] = "recursive"
     chunk_size: int = 512
     chunk_overlap: int = 64
     min_chunk_size: int = 50
     max_chunk_size: int = 1024
     separators: list[str] = field(default_factory=lambda: ["\n\n", "\n", ". ", " ", ""])
-    
-    @validator('chunk_overlap')
-    def validate_overlap(cls, v, values):
-        if 'chunk_size' in values and v >= values['chunk_size']:
-            raise ValueError('chunk_overlap must be less than chunk_size')
-        return v
 
 
 @dataclass
 class EmbeddingConfig:
     """Configuration for embedding generation."""
-    provider: Literal["local", "openai"] = "local"
+    provider: Literal["local", "openai", "deterministic"] = "local"
     model_name: str = "all-MiniLM-L6-v2"
     dimension: int = 384
     batch_size: int = 64
@@ -61,14 +55,6 @@ class RetrievalConfig:
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     adaptive_enabled: bool = True
     adaptive_strategy: Literal["query_type", "confidence", "hybrid"] = "query_type"
-    
-    @validator('dense_weight')
-    def validate_weights(cls, v, values):
-        if 'bm25_weight' in values:
-            total = v + values['bm25_weight']
-            if abs(total - 1.0) > 0.01:
-                raise ValueError(f'dense_weight + bm25_weight must equal 1.0, got {total}')
-        return v
 
 
 @dataclass
@@ -96,7 +82,7 @@ class SecurityConfig:
     max_file_size_mb: int = 50
     max_pages_per_document: int = 500
     max_chunk_length: int = 10000
-    allowed_extensions: list[str] = field(default_factory=lambda: [".pdf"])
+    allowed_extensions: list[str] = field(default_factory=lambda: [".pdf", ".txt", ".md"])
     sanitize_retrieved_text: bool = True
     injection_patterns: list[str] = field(default_factory=lambda: [
         "ignore previous instructions",
@@ -174,7 +160,27 @@ class AppConfig:
     @property
     def logs_dir(self) -> Path:
         return self.base_dir / "logs"
-    
+
+    @property
+    def LOGS_DIR(self) -> Path:
+        return self.logs_dir
+
+    @property
+    def CHROMA_DIR(self) -> Path:
+        return self.chroma_dir
+
+    @property
+    def BM25_INDEX_DIR(self) -> Path:
+        return self.bm25_index_dir
+
+    @property
+    def DOCUMENTS_DIR(self) -> Path:
+        return self.documents_dir
+
+    @property
+    def DATA_DIR(self) -> Path:
+        return self.data_dir
+
     def validate(self) -> None:
         """Validate configuration and create necessary directories."""
         # Validate API key
@@ -186,24 +192,15 @@ class AppConfig:
         
         # Validate weights
         if abs(self.retrieval.dense_weight + self.retrieval.bm25_weight - 1.0) > 0.01:
-            raise ConfigValidationError(
-                f"dense_weight ({self.retrieval.dense_weight}) + "
-                f"bm25_weight ({self.retrieval.bm25_weight}) must equal 1.0"
-            )
+            raise ConfigValidationError("dense_weight + bm25_weight must equal 1.0")
         
         # Validate chunking
         if self.chunking.chunk_overlap >= self.chunking.chunk_size:
-            raise ConfigValidationError(
-                f"chunk_overlap ({self.chunking.chunk_overlap}) must be less than "
-                f"chunk_size ({self.chunking.chunk_size})"
-            )
+            raise ConfigValidationError("chunk_overlap must be < chunk_size")
         
         # Validate reranking
         if self.retrieval.rerank_top_k > self.retrieval.post_fusion_top_k:
-            raise ConfigValidationError(
-                f"rerank_top_k ({self.retrieval.rerank_top_k}) must be <= "
-                f"post_fusion_top_k ({self.retrieval.post_fusion_top_k})"
-            )
+            raise ConfigValidationError("rerank_top_k must be <= post_fusion_top_k")
         
         # Create directories
         for dir_path in [

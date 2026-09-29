@@ -67,6 +67,18 @@ class QueryAnalyzer:
         r'\?$.*\bor\b',  # "X or Y?" questions
     ]
 
+    NUMERICAL_PATTERNS = [
+        r'\b(revenue|profit|loss|margin|income|sales|dividend|ebitda|capex|growth rate|cost of)\b',
+        r'\$[\d,.]+',
+        r'\b\d+[%]\b',
+        r'\b(how much|how many|what was the total|calculate|compute)\b',
+    ]
+
+    COMPARISON_PATTERNS = [
+        r'^\s*compare\b',
+        r'\b(compare|versus|vs\.?|difference between)\b',
+    ]
+
     def classify(self, query: str) -> QueryType:
         """
         Classify a query into a type for adaptive retrieval.
@@ -80,16 +92,34 @@ class QueryAnalyzer:
             QueryType.CONCEPTUAL: 0,
             QueryType.MULTI_HOP: 0,
             QueryType.AMBIGUOUS: 0,
+            QueryType.COMPARISON: 0,
+            QueryType.NUMERICAL: 0,
         }
 
-        # Score each type based on pattern matches
+        # Check comparison (starts with compare or has compare X and/with Y)
+        # But NOT if conceptual "how does ... methodology"
+        if not re.search(r'\b(how does|why does|methodology|approach|framework)\b', query_lower):
+            for pattern in self.COMPARISON_PATTERNS:
+                if re.search(pattern, query_lower):
+                    scores[QueryType.COMPARISON] += 5
+
+        # Check exact quarter or section locator
+        if re.search(r'\bQ[1-4]\b', query) or re.search(r'\b(page|chapter|section)\s+\d+', query_lower):
+            scores[QueryType.EXACT] += 5
+
+        # Check numerical (revenue, profit, sales)
+        for pattern in self.NUMERICAL_PATTERNS:
+            if re.search(pattern, query_lower):
+                scores[QueryType.NUMERICAL] += 3
+
+        # Score other types based on pattern matches
         for pattern in self.EXACT_PATTERNS:
             if re.search(pattern, query_lower):
                 scores[QueryType.EXACT] += 2
 
         for pattern in self.CONCEPTUAL_PATTERNS:
             if re.search(pattern, query_lower):
-                scores[QueryType.CONCEPTUAL] += 2
+                scores[QueryType.CONCEPTUAL] += 4
 
         for pattern in self.MULTI_HOP_PATTERNS:
             if re.search(pattern, query_lower):
@@ -97,25 +127,12 @@ class QueryAnalyzer:
 
         for pattern in self.AMBIGUOUS_PATTERNS:
             if re.search(pattern, query_lower):
-                scores[QueryType.AMBIGUOUS] += 2
-
-        # Check for numerical content (strong exact signal)
-        if re.search(r'\b\d+\.?\d*\b', query):
-            scores[QueryType.EXACT] += 1
-
-        # Check for proper nouns (likely exact lookup)
-        if re.search(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', query):
-            scores[QueryType.EXACT] += 1
+                scores[QueryType.AMBIGUOUS] += 3
 
         # Determine winner
         max_score = max(scores.values())
         if max_score == 0:
             return QueryType.UNKNOWN
-
-        # Check for ties — if multiple types score equally, use hybrid
-        top_types = [t for t, s in scores.items() if s == max_score]
-        if len(top_types) > 1:
-            return QueryType.UNKNOWN  # ambiguous → balanced hybrid
 
         winner = max(scores, key=scores.get)
         logger.debug(f"Query classified as {winner.value} (scores: {scores})")

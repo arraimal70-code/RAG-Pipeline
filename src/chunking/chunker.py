@@ -39,8 +39,11 @@ class FixedSizeChunker:
         char_overlap = cfg.chunk_overlap * 4
 
         for page in pages:
+            if not page.content.strip():
+                continue
             text = page.content
             start = 0
+            page_results = []
             while start < len(text):
                 end = start + char_size
                 chunk_text = text[start:end]
@@ -48,7 +51,7 @@ class FixedSizeChunker:
                 if len(chunk_text.strip()) < cfg.min_chunk_size * 4:
                     break
 
-                results.append(TextChunk(
+                page_results.append(TextChunk(
                     document_id=page.document_id,
                     filename=page.filename,
                     page_number=page.page_number,
@@ -58,6 +61,18 @@ class FixedSizeChunker:
                     metadata={**page.metadata, "chunk_strategy": "fixed"},
                 ))
                 start = end - char_overlap
+
+            if not page_results and text.strip():
+                page_results.append(TextChunk(
+                    document_id=page.document_id,
+                    filename=page.filename,
+                    page_number=page.page_number,
+                    content=text.strip(),
+                    char_offset=page.char_offset,
+                    token_count=max(len(text.strip()) // 4, 1),
+                    metadata={**page.metadata, "chunk_strategy": "fixed"},
+                ))
+            results.extend(page_results)
 
         return results
 
@@ -77,6 +92,8 @@ class SentenceChunker:
         char_size = cfg.chunk_size * 4
 
         for page in pages:
+            if not page.content.strip():
+                continue
             sentences = self.SENTENCE_PATTERN.split(page.content)
             current_chunk = []
             current_length = 0
@@ -102,8 +119,10 @@ class SentenceChunker:
             # Flush remaining
             if current_chunk:
                 chunk_text = " ".join(current_chunk)
-                if len(chunk_text) >= cfg.min_chunk_size * 4:
+                if len(chunk_text) >= cfg.min_chunk_size * 4 or not results:
                     results.append(self._make_chunk(page, chunk_text, cfg))
+            elif not results and page.content.strip():
+                results.append(self._make_chunk(page, page.content.strip(), cfg))
 
         return results
 
@@ -134,13 +153,16 @@ class RecursiveChunker:
         char_overlap = cfg.chunk_overlap * 4
 
         for page in pages:
+            if not page.content.strip():
+                continue
             chunks = self._recursive_split(
                 page.content, cfg.separators, char_size, char_overlap
             )
+            page_results = []
             for chunk_text in chunks:
                 if len(chunk_text.strip()) < cfg.min_chunk_size * 4:
                     continue
-                results.append(TextChunk(
+                page_results.append(TextChunk(
                     document_id=page.document_id,
                     filename=page.filename,
                     page_number=page.page_number,
@@ -149,6 +171,17 @@ class RecursiveChunker:
                     token_count=len(chunk_text) // 4,
                     metadata={**page.metadata, "chunk_strategy": "recursive"},
                 ))
+            if not page_results and page.content.strip():
+                page_results.append(TextChunk(
+                    document_id=page.document_id,
+                    filename=page.filename,
+                    page_number=page.page_number,
+                    content=page.content.strip(),
+                    char_offset=page.char_offset,
+                    token_count=max(len(page.content.strip()) // 4, 1),
+                    metadata={**page.metadata, "chunk_strategy": "recursive"},
+                ))
+            results.extend(page_results)
 
         return results
 
@@ -213,7 +246,10 @@ class StructureAwareChunker:
         char_size = cfg.chunk_size * 4
 
         for page in pages:
+            if not page.content.strip():
+                continue
             sections = self._detect_sections(page.content)
+            page_results = []
 
             for section_name, section_text in sections:
                 # If section is too large, sub-chunk it
@@ -229,9 +265,9 @@ class StructureAwareChunker:
                     for sc in sub_chunks:
                         sc.section = section_name
                         sc.metadata["chunk_strategy"] = "structure"
-                    results.extend(sub_chunks)
+                    page_results.extend(sub_chunks)
                 elif len(section_text.strip()) >= cfg.min_chunk_size * 4:
-                    results.append(TextChunk(
+                    page_results.append(TextChunk(
                         document_id=page.document_id,
                         filename=page.filename,
                         page_number=page.page_number,
@@ -241,6 +277,19 @@ class StructureAwareChunker:
                         token_count=len(section_text) // 4,
                         metadata={**page.metadata, "chunk_strategy": "structure"},
                     ))
+
+            if not page_results and page.content.strip():
+                page_results.append(TextChunk(
+                    document_id=page.document_id,
+                    filename=page.filename,
+                    page_number=page.page_number,
+                    section="body",
+                    content=page.content.strip(),
+                    char_offset=page.char_offset,
+                    token_count=max(len(page.content.strip()) // 4, 1),
+                    metadata={**page.metadata, "chunk_strategy": "structure"},
+                ))
+            results.extend(page_results)
 
         return results
 
@@ -280,6 +329,9 @@ CHUNKERS = {
 
 def get_chunker(strategy: str) -> Chunker:
     """Get a chunker by strategy name."""
+    if strategy == "contextual":
+        from src.chunking.contextual_chunker import ContextualChunker
+        return ContextualChunker()
     if strategy not in CHUNKERS:
-        raise ValueError(f"Unknown chunking strategy: {strategy}. Options: {list(CHUNKERS.keys())}")
+        raise ValueError(f"Unknown chunking strategy: {strategy}. Options: {list(CHUNKERS.keys()) + ['contextual']}")
     return CHUNKERS[strategy]()

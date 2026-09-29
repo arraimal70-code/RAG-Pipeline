@@ -108,6 +108,11 @@ class PolicyGenerator:
             "retrieval_expansion": 1.5,
             "reasoning": "Comparison queries need balanced retrieval across entities",
         },
+        QueryType.NUMERICAL: {
+            "dense_weight": 0.3,
+            "lexical_weight": 0.7,
+            "reasoning": "Numerical queries benefit from exact lexical matching",
+        },
         QueryType.UNKNOWN: {
             "dense_weight": 0.5,
             "lexical_weight": 0.5,

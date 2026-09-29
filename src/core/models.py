@@ -8,7 +8,7 @@ This ensures type safety and makes data flow explicit.
 from __future__ import annotations
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Any
+from typing import Optional, Any, Literal, Union, Dict, List
 from pydantic import BaseModel, Field
 import uuid
 
@@ -64,6 +64,7 @@ class QueryType(str, Enum):
     AMBIGUOUS = "ambiguous"   # unclear intent → expanded retrieval
     MULTI_HOP = "multi_hop"   # requires multiple passages → broader retrieval
     COMPARISON = "comparison" # compare entities → multi-document
+    NUMERICAL = "numerical"   # numbers, arithmetic, metrics, financial figures
     UNKNOWN = "unknown"       # default
 
 
@@ -165,7 +166,7 @@ class QueryResponse(BaseModel):
     query_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     question: str
     answer: str
-    support_level: SupportLevel
+    support_level: Union[SupportLevel, str]
     confidence: float
     citations: list[Citation] = Field(default_factory=list)
     contradictions: list[Contradiction] = Field(default_factory=list)
@@ -226,3 +227,13 @@ class ExperimentResult(BaseModel):
     interpretation: str = ""
     limitations: str = ""
     next_experiment: str = ""
+
+
+# Rebuild models to resolve forward references
+Citation.model_rebuild()
+GenerationOutput.model_rebuild()
+EvidenceAssessment.model_rebuild()
+RetrievalOutput.model_rebuild()
+QueryResponse.model_rebuild()
+EvaluationResult.model_rebuild()
+ExperimentResult.model_rebuild()

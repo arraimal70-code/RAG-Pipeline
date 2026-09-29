@@ -39,19 +39,10 @@ class DocumentValidator:
         Returns:
             (is_valid, reason)
         """
-        # Check file exists
-        if not file_path.exists():
-            return False, "File does not exist"
-        
-        # Check extension
-        if file_path.suffix.lower() not in self.allowed_extensions:
-            return False, f"File extension {file_path.suffix} not allowed"
-        
-        # Check size
-        file_size = file_path.stat().st_size
-        if file_size > self.max_size_bytes:
-            return False, f"File size {file_size} exceeds maximum {self.max_size_bytes}"
-        
+        path_str = str(file_path)
+        if '\x00' in path_str:
+            return False, "Filename contains null byte"
+            
         # Check filename for malicious patterns
         filename = file_path.name
         if not self._is_safe_filename(filename):
@@ -60,20 +51,42 @@ class DocumentValidator:
         # Check path for traversal
         if not self._is_safe_path(file_path):
             return False, "Path contains traversal attempts"
+
+        # Check extension
+        if file_path.suffix.lower() not in self.allowed_extensions:
+            return False, f"File extension {file_path.suffix} not allowed"
+        
+        # Check file exists and size
+        try:
+            if not file_path.exists():
+                return False, "File does not exist"
+            
+            file_size = file_path.stat().st_size
+            if file_size > self.max_size_bytes:
+                return False, f"File size {file_size} exceeds maximum {self.max_size_bytes}"
+        except (OSError, ValueError):
+            return False, "Invalid file access"
         
         return True, "Valid"
     
     def validate_path(self, path_str: str) -> Tuple[bool, str]:
         """Validate a path string for safety."""
+        if '\x00' in path_str:
+            return False, "Path contains null byte"
+
         # Check for path traversal
         if '..' in path_str:
             return False, "Path contains '..' traversal"
         
-        # Check for absolute paths (unless explicitly allowed)
+        # Check for absolute or root-relative paths
         path = Path(path_str)
-        if path.is_absolute():
-            # Could be allowed in some contexts, but flag it
-            return False, "Absolute paths not allowed"
+        if (
+            path.is_absolute()
+            or path_str.startswith(('/', '\\'))
+            or re.match(r'^[a-zA-Z]:', path_str)
+            or any(path_str.lower().startswith(d) for d in ['etc', 'proc', 'sys', 'dev', 'var', 'windows'])
+        ):
+            return False, "Absolute or root-relative paths not allowed"
         
         return True, "Valid"
     
@@ -97,8 +110,8 @@ class DocumentValidator:
         if '\x00' in filename:
             return False
         
-        # Check for path separators
-        if '/' in filename or '\\' in filename:
+        # Check for path separators or traversal
+        if '/' in filename or '\\' in filename or '..' in filename:
             return False
         
         # Check for special characters that could be used in attacks
@@ -112,14 +125,15 @@ class DocumentValidator:
     def _is_safe_path(self, path: Path) -> bool:
         """Check if path is safe (no traversal)."""
         try:
+            path_str = str(path)
+            if '..' in path_str:
+                return False
             # Resolve to absolute path
             resolved = path.resolve()
             
-            # Check if it's within allowed directories
-            # For now, just check it doesn't escape to system directories
-            dangerous_dirs = ['/etc', '/proc', '/sys', '/dev', '/var', 'C:\\Windows']
-            
-            resolved_str = str(resolved)
+            # Check if it escapes to system directories
+            dangerous_dirs = ['/etc', '/proc', '/sys', '/dev', '/var', 'c:\\windows', 'c:/windows']
+            resolved_str = str(resolved).lower()
             for dangerous in dangerous_dirs:
                 if resolved_str.startswith(dangerous):
                     return False
@@ -176,18 +190,31 @@ class QueryValidator:
         Returns:
             (is_safe, reason)
         """
+        if not query or not isinstance(query, str):
+            return False, "Query must be a non-empty string"
+
         # Check length
         if len(query) > self.max_length:
             return False, f"Query exceeds maximum length of {self.max_length}"
         
-        # Check for injection patterns
-        for pattern in self.injection_patterns:
-            if pattern.search(query):
-                return False, f"Query contains potential injection pattern: {pattern.pattern}"
-        
         # Check for null bytes
         if '\x00' in query:
             return False, "Query contains null bytes"
+
+        # Check for Unicode tricks (zero-width characters, bidirectional overrides)
+        unicode_trick_pattern = re.compile(r'[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
+        has_unicode_tricks = bool(unicode_trick_pattern.search(query))
+        clean_query = unicode_trick_pattern.sub('', query)
+        
+        # Check for injection patterns
+        for pattern in self.injection_patterns:
+            if pattern.search(query) or pattern.search(clean_query):
+                if has_unicode_tricks:
+                    return False, f"Malicious injection detected in sanitized unicode text: {pattern.pattern}"
+                return False, f"Query contains potential injection pattern: {pattern.pattern}"
+        
+        if has_unicode_tricks:
+            return True, "Sanitized unicode tricks detected"
         
         return True, "Valid"
     
@@ -269,8 +296,17 @@ def sanitize_input(text: str) -> str:
     # Remove control characters (except newline, tab)
     text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
     
-    # Remove common injection patterns
+    # Remove script tags and dangerous URIs
     text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.IGNORECASE | re.DOTALL)
     text = re.sub(r'javascript:', '', text, flags=re.IGNORECASE)
+
+    # Remove SQL injection patterns
+    text = re.sub(r'\b(drop\s+table|delete\s+from|insert\s+into|update\s+\w+\s+set)\b', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'(\b(or|and)\b\s+\d+\s*=\s*\d+)', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'(\b(drop|delete)\b\s+table)', '', text, flags=re.IGNORECASE)
+    
+    # Remove template injection patterns
+    text = re.sub(r'\{\{.*?\}\}', '', text)
+    text = re.sub(r'\$\{.*?\}', '', text)
     
     return text

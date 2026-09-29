@@ -50,6 +50,36 @@ class PDFParser:
         # Validate before parsing
         self._validate_file(file_path)
 
+        if file_path.suffix.lower() in [".txt", ".md"]:
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+            metadata = DocumentMetadata(
+                filename=file_path.name,
+                file_path=str(file_path),
+                file_size_bytes=file_path.stat().st_size,
+                num_pages=1,
+                title=file_path.stem,
+                author=None,
+                content_hash=content_hash,
+            )
+            chunks = [TextChunk(
+                document_id=metadata.document_id,
+                filename=metadata.filename,
+                page_number=0,
+                content=content.strip(),
+                char_offset=0,
+                token_count=max(len(content.strip()) // 4, 1),
+                metadata={
+                    "source": metadata.file_path,
+                    "total_pages": 1,
+                },
+            )]
+            logger.info(
+                f"Parsed {file_path.name}: 1 page, "
+                f"{len(chunks)} chunks, {sum(c.token_count for c in chunks)} tokens"
+            )
+            return metadata, chunks
+
         try:
             reader = PdfReader(str(file_path))
         except PdfReadError as e:

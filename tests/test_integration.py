@@ -273,6 +273,11 @@ class TestEndToEnd:
 
     def test_pipeline_handles_empty_index(self, pipeline):
         """Test that pipeline handles empty index gracefully."""
+        # Ensure index is empty for this specific test
+        pipeline.vector_index.clear()
+        pipeline.bm25_index.bm25 = None
+        pipeline.bm25_index.chunks = []
+
         # Query with no documents ingested
         response = pipeline.query("What was the revenue?")
 

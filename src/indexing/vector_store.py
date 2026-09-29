@@ -79,14 +79,21 @@ class VectorIndex:
         top_k: int = 50,
         filter_metadata: Optional[dict] = None,
     ) -> list[dict]:
-        """
-        Search for similar chunks.
+        try:
+            count = self.collection.count()
+        except Exception:
+            self.collection = self.client.get_or_create_collection(
+                name=self.COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine"},
+            )
+            count = self.collection.count()
 
-        Returns list of dicts with: id, content, metadata, distance
-        """
+        if count == 0 or top_k <= 0:
+            return []
+
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=min(top_k, self.collection.count()),
+            n_results=min(top_k, count),
             where=filter_metadata,
             include=["documents", "metadatas", "distances"],
         )
@@ -106,7 +113,14 @@ class VectorIndex:
 
     def count(self) -> int:
         """Return number of vectors in the index."""
-        return self.collection.count()
+        try:
+            return self.collection.count()
+        except Exception:
+            self.collection = self.client.get_or_create_collection(
+                name=self.COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine"},
+            )
+            return self.collection.count()
 
     def delete_by_document(self, document_id: str) -> None:
         """Remove all chunks for a document."""
@@ -114,10 +128,18 @@ class VectorIndex:
         logger.info(f"Deleted chunks for document {document_id}")
 
     def clear(self) -> None:
-        """Clear the entire index."""
-        self.client.delete_collection(self.COLLECTION_NAME)
-        self.collection = self.client.create_collection(
-            name=self.COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
+        """Clear all chunks from the vector index."""
+        try:
+            existing = self.collection.get()
+            if existing and existing.get("ids"):
+                self.collection.delete(ids=existing["ids"])
+        except Exception:
+            try:
+                self.client.delete_collection(self.COLLECTION_NAME)
+            except Exception:
+                pass
+            self.collection = self.client.get_or_create_collection(
+                name=self.COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine"},
+            )
         logger.info("Vector index cleared")

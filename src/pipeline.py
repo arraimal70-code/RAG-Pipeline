@@ -199,6 +199,9 @@ class RAGPipeline:
         Raises:
             QueryProcessingError: If query processing fails
         """
+        if not question or not isinstance(question, str):
+            raise QueryProcessingError("Query cannot be empty or non-string")
+            
         query_id = f"query_{self.query_count}_{int(time.time())}"
         self.query_count += 1
         
@@ -352,10 +355,23 @@ class RAGPipeline:
                 return response
                 
             except Exception as e:
-                logger.error(f"Query processing failed: {e}", exc_info=True)
+                msg = str(e)
+                if "sk-" in msg or "key" in msg.lower():
+                    msg = re.sub(r'sk-[a-zA-Z0-9_\-]+', '[REDACTED]', msg)
+                logger.error(f"Query processing failed: {msg}", exc_info=True)
                 self.error_count += 1
-                raise QueryProcessingError(f"Query processing failed: {e}") from e
+                raise QueryProcessingError(f"Query processing failed: {msg}") from e
     
+    def get_stats(self) -> Dict[str, Any]:
+        """Get pipeline operational statistics."""
+        return {
+            "vector_index_size": self.vector_index.count(),
+            "bm25_index_size": self.bm25_index.count(),
+            "config": config.to_dict(),
+            "query_count": self.query_count,
+            "error_count": self.error_count,
+        }
+
     def get_health_status(self) -> Dict[str, Any]:
         """Get pipeline health status."""
         uptime = (datetime.utcnow() - self.start_time).total_seconds()
@@ -369,6 +385,7 @@ class RAGPipeline:
             "vector_index_size": self.vector_index.count(),
             "bm25_index_size": self.bm25_index.count(),
             "configuration": config.to_dict(),
+            "config": config.to_dict(),
         }
     
     def get_diagnostics(self) -> Dict[str, Any]:
@@ -395,25 +412,40 @@ class RAGPipeline:
         logger.info("Indexes cleared")
 
 
-# Global pipeline instance
-pipeline = RAGPipeline()
+# Lazy pipeline singleton
+_pipeline_instance: Optional[RAGPipeline] = None
+
+
+def get_pipeline() -> RAGPipeline:
+    global _pipeline_instance
+    if _pipeline_instance is None:
+        _pipeline_instance = RAGPipeline()
+    return _pipeline_instance
+
+
+class _LazyPipelineProxy:
+    def __getattr__(self, name):
+        return getattr(get_pipeline(), name)
+
+
+pipeline = _LazyPipelineProxy()
 
 
 def ingest_document(file_path: str) -> Dict[str, Any]:
     """Convenience function for document ingestion."""
-    return pipeline.ingest_document(file_path)
+    return get_pipeline().ingest_document(file_path)
 
 
 def query(question: str) -> QueryResponse:
     """Convenience function for querying."""
-    return pipeline.query(question)
+    return get_pipeline().query(question)
 
 
 def get_health_status() -> Dict[str, Any]:
     """Get pipeline health status."""
-    return pipeline.get_health_status()
+    return get_pipeline().get_health_status()
 
 
 def get_diagnostics() -> Dict[str, Any]:
     """Get detailed diagnostics."""
-    return pipeline.get_diagnostics()
+    return get_pipeline().get_diagnostics()

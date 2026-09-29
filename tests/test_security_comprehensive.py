@@ -139,14 +139,20 @@ class TestDocumentValidation:
         
         for name in malicious_names:
             temp_path = Path(tempfile.gettempdir()) / name
-            temp_path.touch()
+            try:
+                temp_path.touch()
+            except (OSError, ValueError):
+                pass
             
             try:
                 is_valid, reason = validator.validate(temp_path)
                 assert not is_valid, f"Failed to reject: {name}"
             finally:
-                if temp_path.exists():
-                    temp_path.unlink()
+                try:
+                    if temp_path.exists():
+                        temp_path.unlink()
+                except (OSError, ValueError):
+                    pass
     
     def test_path_traversal(self, validator):
         """Test path traversal prevention."""

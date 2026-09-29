@@ -43,6 +43,7 @@ chroma_db/
 bm25_index/
 logs/
 experiments/results/
+benchmarks/results/
 *.pdf
 *.pkl
 
