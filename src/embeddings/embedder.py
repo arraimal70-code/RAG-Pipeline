@@ -95,7 +95,10 @@ class LocalEmbedder:
         from sentence_transformers import SentenceTransformer
         logger.info(f"Loading local embedding model: {model_name}")
         self.model = SentenceTransformer(model_name)
-        self.dimension = self.model.get_sentence_embedding_dimension()
+        if hasattr(self.model, "get_embedding_dimension"):
+            self.dimension = self.model.get_embedding_dimension()
+        else:
+            self.dimension = self.model.get_sentence_embedding_dimension()
         logger.info(f"Model loaded. Dimension: {self.dimension}")
 
     def embed(self, texts: list[str]) -> list[list[float]]:

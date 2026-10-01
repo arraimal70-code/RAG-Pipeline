@@ -46,6 +46,10 @@ BANNER = f"""{TerminalColors.CYAN}{TerminalColors.BOLD}
 {TerminalColors.GREEN}Active SOTA Capabilities:{TerminalColors.RESET}
   * Anthropic Contextual Retrieval (Chunk-level situated document grounding)
   * Stanford DSPy / IR-CoT Dynamic Query Decomposition
+  * Stanford ColBERT Late-Interaction Token MaxSim Scoring (\sum_i \max_j q_i^\top d_j)
+  * Rocchio & RM3 Pseudo-Relevance Feedback (PRF) Query Expansion
+  * Conversational Coreference Normalizer & Relative Temporal Grounder
+  * Multi-Modal Table & Matrix Linearization Engine (Row-column triples)
   * Gao et al. ACL 2023 HyDE (Hypothetical Document Embeddings)
   * Corrective RAG (CRAG) & Self-RAG Reflection Critique ([ISREL], [ISSUP], [ISUSE])
   * Sub-5ms Cosine Similarity Semantic Cache
@@ -75,6 +79,25 @@ def format_response_card(resp: QueryResponse, total_ms: float) -> str:
     crag_act = resp.retrieval_metadata.get("crag_action", "N/A")
     lines.append(f"  * Query Classification: {TerminalColors.BOLD}{q_type}{TerminalColors.RESET}")
     lines.append(f"  * CRAG Action:          {TerminalColors.BOLD}{crag_act.upper()}{TerminalColors.RESET}")
+
+    # Query Rewriter Telemetry
+    q_rw = resp.retrieval_metadata.get("query_rewrite", {})
+    if q_rw:
+        lines.append(f"  * Query Rewriter:       '{q_rw.get('original_query')}' -> '{q_rw.get('rewritten_query')}'")
+        if q_rw.get("coreferences"):
+            lines.append(f"    - Coreferences:       {q_rw.get('coreferences')}")
+        if q_rw.get("temporal_anchors"):
+            lines.append(f"    - Temporal Anchors:   {q_rw.get('temporal_anchors')}")
+
+    # PRF Telemetry
+    prf_meta = resp.retrieval_metadata.get("prf", {})
+    if prf_meta:
+        lines.append(f"  * Rocchio PRF Expansion:{prf_meta.get('expanded_query')}")
+        lines.append(f"    - Terms: {prf_meta.get('expansion_terms')} | Drift Cosine: {prf_meta.get('drift_cosine', 1.0):.3f}")
+
+    # Late Interaction MaxSim
+    if resp.retrieval_metadata.get("late_interaction"):
+        lines.append(f"  * ColBERT MaxSim:       {TerminalColors.GREEN}ENABLED (Token-level alignment scoring active){TerminalColors.RESET}")
 
     # Self-RAG
     self_rag = resp.retrieval_metadata.get("self_rag_critique", {})
@@ -111,6 +134,10 @@ def run_interactive_repl(pipeline: RAGPipeline):
     print("  /ingest <path>    - Ingest a text, markdown, or PDF document")
     print("  /agentic <query>  - Autonomous multi-step ReAct planning & iterative execution")
     print("  /graph <query>    - GraphRAG global query & entity community traversal")
+    print("  /maxsim           - Toggle ColBERT Late-Interaction Token MaxSim reranking")
+    print("  /prf              - Toggle Rocchio Pseudo-Relevance Feedback expansion")
+    print("  /mmr              - Toggle Maximal Marginal Relevance diversity reranking")
+    print("  /table <text|file>- Linearize tabular matrix into row-column semantic triples")
     print("  /cache            - Display semantic cache performance metrics")
     print("  /cache-clear      - Flush semantic cache entries")
     print("  /clear            - Reset vector index, BM25 index, graph, and cache")
@@ -119,6 +146,8 @@ def run_interactive_repl(pipeline: RAGPipeline):
     print("  /exit, /quit      - Terminate console session\n")
 
     use_mmr = False
+    use_maxsim = True
+    use_prf = False
 
     while True:
         try:
@@ -131,13 +160,38 @@ def run_interactive_repl(pipeline: RAGPipeline):
                 break
 
             elif user_input in ("/help", "help"):
-                print("Available commands: /agentic <query>, /graph <query>, /ingest <path>, /cache, /cache-clear, /clear, /stats, /help, /exit")
+                print("Available commands: /agentic <query>, /graph <query>, /maxsim, /prf, /mmr, /table <text|file>, /ingest <path>, /cache, /cache-clear, /clear, /stats, /help, /exit")
                 continue
 
             elif user_input == "/mmr":
                 use_mmr = not use_mmr
                 status = f"{TerminalColors.GREEN}ENABLED{TerminalColors.RESET}" if use_mmr else f"{TerminalColors.YELLOW}DISABLED{TerminalColors.RESET}"
                 print(f"Maximal Marginal Relevance (MMR) diversity reranking: {status}")
+                continue
+
+            elif user_input == "/maxsim":
+                use_maxsim = not use_maxsim
+                status = f"{TerminalColors.GREEN}ENABLED{TerminalColors.RESET}" if use_maxsim else f"{TerminalColors.YELLOW}DISABLED{TerminalColors.RESET}"
+                print(f"ColBERT Late-Interaction Token MaxSim Scoring: {status}")
+                continue
+
+            elif user_input == "/prf":
+                use_prf = not use_prf
+                status = f"{TerminalColors.GREEN}ENABLED{TerminalColors.RESET}" if use_prf else f"{TerminalColors.YELLOW}DISABLED{TerminalColors.RESET}"
+                print(f"Rocchio Pseudo-Relevance Feedback (PRF): {status}")
+                continue
+
+            elif user_input.startswith("/table "):
+                target = user_input[7:].strip()
+                if os.path.exists(target):
+                    with open(target, "r", encoding="utf-8", errors="ignore") as f:
+                        tbl_content = f.read()
+                else:
+                    tbl_content = target
+                linearized = pipeline.linearize_table(tbl_content)
+                print(f"\n{TerminalColors.BOLD}{TerminalColors.GREEN}=== LINEARIZED TABLE SEMANTIC TRIPLES ==={TerminalColors.RESET}")
+                print(linearized)
+                print()
                 continue
 
             elif user_input == "/clear":
@@ -213,7 +267,14 @@ def run_interactive_repl(pipeline: RAGPipeline):
 
             # Standard Query
             t_start = time.perf_counter()
-            resp = pipeline.query(user_input, use_cache=True, use_hyde=False)
+            resp = pipeline.query(
+                user_input,
+                use_cache=True,
+                use_hyde=False,
+                use_mmr=use_mmr,
+                use_maxsim=use_maxsim,
+                use_prf=use_prf,
+            )
             t_elapsed = (time.perf_counter() - t_start) * 1000
 
             card = format_response_card(resp, t_elapsed)
@@ -235,9 +296,21 @@ def main():
     parser.add_argument("--ingest", "-i", type=str, help="Ingest document before running")
     parser.add_argument("--hyde", action="store_true", help="Enable HyDE zero-shot dense query synthesis")
     parser.add_argument("--mmr", action="store_true", help="Enable Maximal Marginal Relevance diversity reranking")
+    parser.add_argument("--maxsim", action="store_true", help="Enable ColBERT Late-Interaction token MaxSim reranking")
+    parser.add_argument("--prf", action="store_true", help="Enable Rocchio Pseudo-Relevance Feedback query expansion")
+    parser.add_argument("--table", type=str, help="Linearize table string or table file and exit")
     args = parser.parse_args()
 
     pipeline = RAGPipeline()
+
+    if args.table:
+        if os.path.exists(args.table):
+            with open(args.table, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+        else:
+            content = args.table
+        print(pipeline.linearize_table(content))
+        sys.exit(0)
 
     if args.ingest:
         if os.path.exists(args.ingest):
@@ -265,9 +338,18 @@ def main():
             print(f"  Total Nodes:   {graph_data['total_graph_nodes']} | Edges: {graph_data['total_graph_edges']}")
         else:
             t0 = time.perf_counter()
-            resp = pipeline.query(args.query, use_cache=True, use_hyde=args.hyde, use_mmr=args.mmr)
+            resp = pipeline.query(
+                args.query,
+                use_cache=True,
+                use_hyde=args.hyde,
+                use_mmr=args.mmr,
+                use_maxsim=args.maxsim,
+                use_prf=args.prf,
+            )
             total_ms = (time.perf_counter() - t0) * 1000
             print(format_response_card(resp, total_ms))
+    else:
+        run_interactive_repl(pipeline)
     else:
         run_interactive_repl(pipeline)
 

@@ -5,6 +5,7 @@ Production-ready RAG Pipeline with comprehensive error handling, monitoring, and
 import time
 import logging
 import json
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -34,6 +35,10 @@ from src.graph.graph_rag import GraphRAGEngine
 from src.agentic.planner import AgenticRAGPlanner, AgenticPlanResult
 from src.retrieval.hierarchical import HierarchicalRetriever, HierarchicalChunker
 from src.retrieval.mmr import MaximalMarginalRelevanceReranker
+from src.retrieval.late_interaction import LateInteractionScorer
+from src.retrieval.prf import PseudoRelevanceFeedbackEngine
+from src.adaptive.query_rewriter import QueryRewriter
+from src.parsing.table_parser import TableParser
 from src.observability.tracing import tracer
 from src.security.validator import DocumentValidator, QueryValidator
 
@@ -112,6 +117,10 @@ class RAGPipeline:
         self.agentic_planner = AgenticRAGPlanner()
         self.hierarchical_retriever = HierarchicalRetriever()
         self.mmr_reranker = MaximalMarginalRelevanceReranker(embedder=self.embedder)
+        self.late_interaction_scorer = LateInteractionScorer()
+        self.prf_engine = PseudoRelevanceFeedbackEngine(embedder=self.embedder)
+        self.query_rewriter = QueryRewriter()
+        self.table_parser = TableParser()
         
         # Security
         self.document_validator = DocumentValidator()
@@ -161,6 +170,11 @@ class RAGPipeline:
                 logger.info(f"Parsing document: {path.name}")
                 metadata, page_chunks = self.parser.parse(path)
                 
+                # Linearize tabular matrices to preserve column-row semantic associations
+                for page in page_chunks:
+                    if "|" in page.content:
+                        page.content = self.table_parser.linearize_document_tables(page.content)
+
                 # Chunk document
                 logger.info(f"Chunking document with strategy: {config.chunking.strategy}")
                 chunker = get_chunker(config.chunking.strategy)
@@ -232,6 +246,11 @@ class RAGPipeline:
         use_hyde: bool = False,
         use_mmr: bool = False,
         use_graph: bool = True,
+        use_maxsim: bool = False,
+        use_prf: bool = False,
+        use_rewriter: bool = True,
+        dialogue_history: Optional[List[str]] = None,
+        context_entity: Optional[str] = None,
     ) -> QueryResponse:
         """
         Process a query through the full pipeline with comprehensive validation.
@@ -242,6 +261,11 @@ class RAGPipeline:
             use_hyde: Whether to apply Hypothetical Document Embeddings
             use_mmr: Whether to apply Maximal Marginal Relevance diversity reranking
             use_graph: Whether to enrich query response with GraphRAG entity networks
+            use_maxsim: Whether to apply ColBERT-style Late-Interaction token MaxSim scoring
+            use_prf: Whether to apply Rocchio Pseudo-Relevance Feedback query expansion
+            use_rewriter: Whether to normalize coreferences, temporal expressions, and acronyms
+            dialogue_history: Optional prior messages for coreference resolution
+            context_entity: Optional explicit antecedent entity (e.g. 'Apple')
             
         Returns:
             QueryResponse with answer, citations, and metadata
@@ -251,6 +275,25 @@ class RAGPipeline:
         """
         if not question or not isinstance(question, str):
             raise QueryProcessingError("Query cannot be empty or non-string")
+
+        # Stage 0: Conversational coreference resolution and temporal query rewriting
+        rewrite_meta = None
+        if use_rewriter:
+            rw = self.query_rewriter.rewrite(
+                question,
+                dialogue_history=dialogue_history,
+                context_entity=context_entity,
+            )
+            if rw.is_rewritten:
+                logger.info(f"Query rewritten: '{question}' -> '{rw.rewritten_query}'")
+                rewrite_meta = {
+                    "original_query": rw.original_query,
+                    "rewritten_query": rw.rewritten_query,
+                    "coreferences": rw.coreferences_resolved,
+                    "temporal_anchors": rw.temporal_anchors_applied,
+                    "expanded_acronyms": rw.expanded_acronyms,
+                }
+                question = rw.rewritten_query
 
         # Fast-path: Semantic Cache check (<5ms)
         if use_cache:
@@ -297,6 +340,48 @@ class RAGPipeline:
                 else:
                     retrieval = self.retriever.retrieve(question, policy=policy)
 
+                # Stage 3b: Rocchio Pseudo-Relevance Feedback (PRF) Query Expansion
+                if use_prf and retrieval.candidates:
+                    logger.info("Applying Rocchio Pseudo-Relevance Feedback (PRF)")
+                    prf_res, exp_vec = self.prf_engine.expand_query(question, retrieval.candidates)
+                    retrieval.method_details["prf"] = {
+                        "expanded_query": prf_res.expanded_query,
+                        "expansion_terms": [t[0] for t in prf_res.expansion_terms],
+                        "drift_cosine": prf_res.dense_vector_drift,
+                        "drift_guarded": prf_res.drift_guarded,
+                    }
+                    if not prf_res.drift_guarded and prf_res.expanded_query != question:
+                        extra_dense = self.vector_index.search(exp_vec, top_k=min(3, policy.dense_top_k))
+                        existing_ids = {c.chunk.chunk_id for c in retrieval.candidates}
+                        for h in extra_dense:
+                            chunk_id = h["chunk_id"] if isinstance(h, dict) else getattr(h, "chunk_id", str(uuid.uuid4()))
+                            if chunk_id not in existing_ids:
+                                if isinstance(h, dict):
+                                    meta = h.get("metadata", {})
+                                    chunk = TextChunk(
+                                        chunk_id=chunk_id,
+                                        document_id=meta.get("document_id", ""),
+                                        filename=meta.get("filename", ""),
+                                        page_number=meta.get("page_number", 1),
+                                        section=meta.get("section", ""),
+                                        content=h.get("content", ""),
+                                        metadata=meta,
+                                    )
+                                    score = float(h.get("score", 0.60))
+                                else:
+                                    chunk = h
+                                    score = 0.60
+                                retrieval.candidates.append(
+                                    RetrievalResult(
+                                        chunk=chunk,
+                                        score=score,
+                                        retrieval_method="dense+prf",
+                                        rank=len(retrieval.candidates) + 1,
+                                    )
+                                )
+                                existing_ids.add(chunk_id)
+                        retrieval.total_candidates = len(retrieval.candidates)
+
                 trace.add_event("retrieval", {
                     "num_candidates": retrieval.total_candidates,
                     "method_details": retrieval.method_details,
@@ -327,6 +412,15 @@ class RAGPipeline:
                     )
                     retrieval.total_candidates = len(retrieval.candidates)
                     retrieval.method_details["mmr"] = {"enabled": True}
+
+                # Stage 4c: ColBERT-style Late-Interaction Token MaxSim Scoring
+                if use_maxsim and retrieval.candidates:
+                    logger.info("Applying ColBERT-style Late-Interaction MaxSim scoring")
+                    retrieval.candidates = self.late_interaction_scorer.rerank(
+                        question, retrieval.candidates, top_k=min(5, len(retrieval.candidates))
+                    )
+                    retrieval.total_candidates = len(retrieval.candidates)
+                    retrieval.method_details["late_interaction"] = {"enabled": True}
                 
                 # Stage 5: Evidence sufficiency assessment
                 logger.info("Assessing evidence sufficiency")
@@ -445,6 +539,10 @@ class RAGPipeline:
                         "total_graph_edges": graph_meta["total_graph_edges"],
                     }
 
+                # Attach query rewrite telemetry if active
+                if rewrite_meta:
+                    response.retrieval_metadata["query_rewrite"] = rewrite_meta
+
                 # Populate semantic cache if answer is verified and not abstained
                 if use_cache and not response.abstained and response.confidence >= 0.5:
                     self.semantic_cache.put(question, response)
@@ -468,6 +566,10 @@ class RAGPipeline:
                 self.error_count += 1
                 raise QueryProcessingError(f"Query processing failed: {msg}") from e
     
+    def linearize_table(self, text: str) -> str:
+        """Linearize Markdown and tabular matrices into explicit semantic row-column statements."""
+        return self.table_parser.linearize_document_tables(text)
+
     def get_stats(self) -> Dict[str, Any]:
         """Get pipeline operational statistics."""
         return {

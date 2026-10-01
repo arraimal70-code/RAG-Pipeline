@@ -111,11 +111,22 @@ Where:
 - \( A(y) = \{a_1, a_2, \dots, a_m\} \) is the set of decomposed atomic assertions extracted by regex dependency and predicate parsing.
 - \( \mathbb{I}\left( \mathcal{C} \models a \right) \) evaluates to \( 1 \) if claim \( a \) is entailed by retrieved context evidence \( \mathcal{C} \), and \( 0 \) otherwise.
 
-### 4. Normalized Discounted Cumulative Gain (NDCG@K)
-Retrieval ranking quality against gold source documents:
-
 \[
 \text{DCG@K} = \sum_{i=1}^{K} \frac{2^{\text{rel}_i} - 1}{\log_2(i + 1)}, \quad \text{NDCG@K} = \frac{\text{DCG@K}}{\text{IDCG@K}}
+\]
+
+### 5. Stanford ColBERT Late-Interaction Token MaxSim Scoring
+Preserves token-level semantic granularity without $O(L^2)$ cross-attention overhead:
+
+\[
+\text{MaxSim}(Q, D) = \sum_{i=1}^{|Q|} w_i \max_{j=1}^{|D|} \left( \mathbf{e}_{q,i}^\top \mathbf{e}_{d,j} \right)
+\]
+
+### 6. Rocchio & RM3 Pseudo-Relevance Feedback (PRF) Query Expansion
+Blends dense query embedding with feedback document centroid while applying anti-drift guardrails:
+
+\[
+\mathbf{q}_{\text{exp}} = \alpha \mathbf{q}_0 + \frac{\beta}{|D_R|} \sum_{d \in D_R} \mathbf{d}, \quad \text{Guardrail: } \cos(\mathbf{q}_0, \mathbf{q}_{\text{exp}}) \ge \tau_{\text{drift}}
 \]
 
 ---
@@ -234,9 +245,12 @@ python src/cli.py --query "Compare operating margins of Alphabet vs Microsoft in
 **Console Features:**
 - `/agentic <query>`: Autonomous multi-step ReAct planning, isolated sub-queries, and multi-source synthesis.
 - `/graph <query>`: GraphRAG global entity discovery, relationship graph extraction, and community summaries.
+- `/maxsim`: Toggle Stanford ColBERT Late-Interaction Token MaxSim reranking on/off.
+- `/prf`: Toggle Rocchio Pseudo-Relevance Feedback (PRF) query expansion on/off.
 - `/mmr`: Toggle Maximal Marginal Relevance diversity reranking on/off.
+- `/table <text|file>`: Linearize Markdown/ASCII tables into row-column semantic triples.
 - `/query <question>`: Real-time query execution with color-coded confidence, citations, and latency telemetry.
-- `/ingest <path>`: Live ingestion of PDF, TXT, or Markdown documents with contextual chunking and knowledge graph indexing.
+- `/ingest <path>`: Live ingestion of PDF, TXT, or Markdown documents with contextual chunking, table linearization, and knowledge graph indexing.
 - `/cache`: Inspect semantic cache metrics (lookups, hits, hit rate, LRU count).
 - `/cache-clear`: Flush semantic cache entries.
 - `/clear`: Reset all vector stores, BM25 indices, knowledge graphs, and caches.
@@ -278,10 +292,11 @@ pytest tests/ -v
 | `test_sota_extensions.py` | HyDE embeddings, CRAG refinement, Self-RAG critique, Semantic Cache | 10 | **PASS** |
 | `test_god_level.py` | GraphRAG, Agentic ReAct Planner, Hierarchical Small-to-Big, MMR | 8 | **PASS** |
 | `test_brutal_stress.py` | Concurrency torture, unicode tricks, massive payloads, needle-in-haystack | 9 | **PASS** |
+| `test_chaos_extended.py` | ColBERT MaxSim, Rocchio PRF, Coreference, Table Triples, 30-thread chaos | 18 | **PASS** |
 | `test_security.py` | Prompt injection detection, resource limits, file types | 13 | **PASS** |
 | `test_security_comprehensive.py` | Unicode tricks, path traversal, null bytes, API rate limiting | 20 | **PASS** |
 | `test_integration.py` | End-to-end pipeline, numerical reasoning, empty index | 15 | **PASS** |
-| **Total** | | **119** | **100% Passing** |
+| **Total** | | **137** | **100% Passing** |
 
 ---
 

@@ -223,8 +223,88 @@ Where:
 ## 12. Brutal Stress, Chaos & Concurrency Resilience
 
 The pipeline has been hardened through adversarial and chaotic stress testing:
-- **Thread-Safe Concurrent Execution**: Thread-safe `threading.RLock()` synchronization protects the in-memory semantic cache and index structures under 20+ parallel query threads.
+- **Thread-Safe Concurrent Execution**: Thread-safe `threading.RLock()` synchronization protects the in-memory semantic cache and index structures under 30+ parallel query threads.
 - **Logit Calibration**: Raw cross-encoder logits (\( -\infty, +\infty \)) are mapped into calibrated probabilities via numerical sigmoid transforms (\( \sigma(x) \)), preventing false abstentions on high-quality evidence.
 - **Adversarial Sanitization**: Strips zero-width characters (`\u200B`, `\uFEFF`), RTL overrides (`\u202E`), SQLi polyglots, and prompt jailbreak attempts.
 - **Defensive Math Safeguards**: Programmatic numerical reasoning prevents division-by-zero, handles negative percentage margins, and normalizes disparate financial units.
+
+---
+
+## 13. Stanford ColBERT-Style Token-Level Late Interaction MaxSim Scoring
+
+Standard single-vector dense retrieval compresses an entire chunk into a single point in latent space, discarding fine-grained numeric qualifiers, multi-token entity identifiers, and negations. Cross-encoders solve this but incur severe $O(L^2)$ transformer self-attention latency.
+
+The **`LateInteractionScorer`** implements Khattab & Zaharia's (SIGIR 2020) ColBERT Late Interaction:
+Tokens are embedded as sequences of normalized vectors $E_q = [\mathbf{e}_{q,1}, \dots, \mathbf{e}_{q,|Q|}]$ and $E_d = [\mathbf{e}_{d,1}, \dots, \mathbf{e}_{d,|D|}]$. The relevance score is computed via the token-level **MaxSim operator**:
+
+\[
+\text{MaxSim}(Q, D) = \sum_{i=1}^{|Q|} w_i \max_{j=1}^{|D|} \left( \mathbf{e}_{q,i}^\top \mathbf{e}_{d,j} \right)
+\]
+
+Where:
+- Each query token finds its maximally aligned counterpart in the document passage.
+- Token weights $w_i$ down-weight generic grammatical stopwords while emphasizing rare domain entities.
+- Provides token-to-token alignment maps for complete interpretability and auditability.
+
+---
+
+## 14. Rocchio & RM3 Pseudo-Relevance Feedback (PRF) Query Expansion
+
+To combat vocabulary mismatch and query under-specification, the pipeline integrates Rocchio relevance feedback (Rocchio 1971; RM3):
+
+```mermaid
+flowchart LR
+    Q0[Original Query Q0] --> InitRet[Initial Hybrid Retrieval]
+    InitRet --> TopK[Top-K Feedback Passages D_R]
+    TopK --> TermExt[RM3 Salience Extractor]
+    TopK --> Centroid[Compute Document Centroid]
+    TermExt --> ExpTerms[Salient Discriminative Terms]
+    Centroid --> RocchioBlend[Rocchio Vector Blending]
+    RocchioBlend --> Guardrail{Cosine Anti-Drift Guardrail}
+    Guardrail -->|cos >= tau| Expanded[Expanded Dense Vector]
+    Guardrail -->|cos < tau| Revert[Guarded Conservative Query]
+```
+
+### Mathematical Formulation
+The dense query vector is adjusted toward the feedback passage centroid:
+
+\[
+\mathbf{q}_{\text{exp}} = \alpha \mathbf{q}_0 + \frac{\beta}{|D_R|} \sum_{d \in D_R} \mathbf{d}
+\]
+
+Lexical expansion terms are selected using RM3 term relevance:
+
+\[
+\text{Score}(t) = \text{TF}(t, D_R) \times \left(1 + \log\left( 1 + 2 \cdot \frac{\text{DF}(t, D_R)}{|D_R|} \right)\right)
+\]
+
+**Anti-Drift Guardrail**: If $\cos(\mathbf{q}_0, \mathbf{q}_{\text{exp}}) < \tau_{\text{drift}}$ (e.g. 0.60), the expansion is automatically clamped to prevent adversarial query drift.
+
+---
+
+## 15. Conversational Coreference Normalizer & Relative Temporal Grounder
+
+Real-world user queries in multi-turn sessions contain ambiguous anaphora (*"What was its margin?"*) and relative temporal markers (*"last year"*, *"two years ago"*).
+
+The **`QueryRewriter`** performs:
+1. **Coreference Resolution**: Replaces pronouns (*it*, *its*, *their*, *the company*) with explicit antecedent named entities extracted from dialogue history.
+2. **Temporal Grounding**: Translates relative expressions (*"last year"*, *"previous year"*) into explicit calendar or fiscal years relative to an anchor year (e.g. 2024 $\to$ 2023).
+3. **Domain Acronym Disambiguation**: Enriches high-frequency financial and technical acronyms (EBITDA, CAGR, ARR, LLM, EPS) with canonical expansions.
+
+---
+
+## 16. Multi-Modal Table & Matrix Linearization Engine
+
+Standard token chunkers shred structured multi-column tables, disconnecting cell values from column headers and rendering financial statements, balance sheets, and benchmark tables unanswerable.
+
+The **`TableParser`** detects and transforms Markdown, ASCII, and CSV tables into three synchronized representations:
+1. **Canonical Clean Markdown**: Preserves structural layout.
+2. **Linearized Semantic Triples (Row-Column Statements)**:
+   ```
+   [Row 1] Segment: Google Cloud | FY2022: $26.3B | FY2023: $33.1B | Growth: +25.9%
+   ```
+3. **Table Schema & Entry Summaries**: Natural language summaries describing column headers, row counts, and data types (currency, percentage, numeric).
+
+These linearized triples are embedded into the vector store and BM25 index alongside narrative text, enabling pinpoint retrieval of exact numerical cells.
+
 
