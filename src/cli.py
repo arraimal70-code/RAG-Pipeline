@@ -109,11 +109,16 @@ def run_interactive_repl(pipeline: RAGPipeline):
     print(BANNER)
     print(f"{TerminalColors.BOLD}Commands:{TerminalColors.RESET}")
     print("  /ingest <path>    - Ingest a text, markdown, or PDF document")
+    print("  /agentic <query>  - Autonomous multi-step ReAct planning & iterative execution")
+    print("  /graph <query>    - GraphRAG global query & entity community traversal")
     print("  /cache            - Display semantic cache performance metrics")
     print("  /cache-clear      - Flush semantic cache entries")
-    print("  /stats            - Show index corpus metrics")
+    print("  /clear            - Reset vector index, BM25 index, graph, and cache")
+    print("  /stats            - Show index corpus and knowledge graph metrics")
     print("  /help             - Show this help message")
     print("  /exit, /quit      - Terminate console session\n")
+
+    use_mmr = False
 
     while True:
         try:
@@ -126,7 +131,45 @@ def run_interactive_repl(pipeline: RAGPipeline):
                 break
 
             elif user_input in ("/help", "help"):
-                print("Available commands: /ingest <path>, /cache, /cache-clear, /stats, /help, /exit")
+                print("Available commands: /agentic <query>, /graph <query>, /ingest <path>, /cache, /cache-clear, /clear, /stats, /help, /exit")
+                continue
+
+            elif user_input == "/mmr":
+                use_mmr = not use_mmr
+                status = f"{TerminalColors.GREEN}ENABLED{TerminalColors.RESET}" if use_mmr else f"{TerminalColors.YELLOW}DISABLED{TerminalColors.RESET}"
+                print(f"Maximal Marginal Relevance (MMR) diversity reranking: {status}")
+                continue
+
+            elif user_input == "/clear":
+                pipeline.clear()
+                print(f"{TerminalColors.GREEN}All vector stores, lexical indices, knowledge graphs, and caches cleared.{TerminalColors.RESET}")
+                continue
+
+            elif user_input.startswith("/agentic "):
+                q = user_input[9:].strip()
+                print(f"\n{TerminalColors.BOLD}{TerminalColors.PURPLE if hasattr(TerminalColors, 'PURPLE') else TerminalColors.BLUE}=== AGENTIC REACT EXECUTION ==={TerminalColors.RESET}")
+                t0 = time.perf_counter()
+                agentic_res = pipeline.agentic_query(q)
+                dt = (time.perf_counter() - t0) * 1000
+                for step in agentic_res.steps:
+                    print(f"  {TerminalColors.BOLD}[Step {step.step_id}]{TerminalColors.RESET} {step.goal}")
+                    print(f"    Thought:     {TerminalColors.DIM}{step.thought}{TerminalColors.RESET}")
+                    print(f"    Observation: {step.observation[:120]}...\n")
+                print(f"{TerminalColors.BOLD}{TerminalColors.GREEN}=== FINAL AGENTIC SYNTHESIS ==={TerminalColors.RESET}")
+                print(f"{agentic_res.final_synthesis}\n")
+                print(f"Total Steps: {agentic_res.total_steps} | Execution Latency: {dt:.1f}ms\n")
+                continue
+
+            elif user_input.startswith("/graph "):
+                q = user_input[7:].strip()
+                print(f"\n{TerminalColors.BOLD}{TerminalColors.CYAN}=== GRAPHRAG GLOBAL TRAVERSAL ==={TerminalColors.RESET}")
+                graph_data = pipeline.graph_engine.global_query(q)
+                print(f"  Seed Entities:       {', '.join(graph_data['seed_entities']) if graph_data['seed_entities'] else 'None detected'}")
+                print(f"  Matched Communities: {len(graph_data['matched_communities'])}")
+                print(f"  Total Graph Nodes:   {graph_data['total_graph_nodes']} | Edges: {graph_data['total_graph_edges']}")
+                for comm in graph_data['matched_communities'][:3]:
+                    print(f"  * Community {comm['community_id']} ({comm['type']}): {comm['summary']}")
+                print()
                 continue
 
             elif user_input == "/cache":
@@ -145,9 +188,13 @@ def run_interactive_repl(pipeline: RAGPipeline):
             elif user_input == "/stats":
                 v_count = pipeline.retriever.vector_index.count()
                 b_count = pipeline.retriever.bm25_index.count()
-                print(f"\n{TerminalColors.BOLD}=== CORPUS INDEX STATS ==={TerminalColors.RESET}")
+                g_nodes = len(pipeline.graph_engine.graph.nodes)
+                g_edges = len(pipeline.graph_engine.graph.edges)
+                print(f"\n{TerminalColors.BOLD}=== CORPUS & KNOWLEDGE GRAPH STATS ==={TerminalColors.RESET}")
                 print(f"  Vector Index Chunks: {v_count}")
                 print(f"  BM25 Index Chunks:   {b_count}")
+                print(f"  GraphRAG Entities:   {g_nodes}")
+                print(f"  GraphRAG Relations:  {g_edges}")
                 print(f"  Total Queries Served:{pipeline.query_count}\n")
                 continue
 
@@ -161,7 +208,7 @@ def run_interactive_repl(pipeline: RAGPipeline):
                 meta = pipeline.ingest_document(filepath)
                 dt = (time.perf_counter() - t0) * 1000
                 chunks_count = meta.get("num_chunks", "N/A")
-                print(f"{TerminalColors.GREEN}Successfully ingested {chunks_count} chunks in {dt:.1f}ms.{TerminalColors.RESET}")
+                print(f"{TerminalColors.GREEN}Successfully ingested {chunks_count} chunks into Vector, BM25, and Knowledge Graph in {dt:.1f}ms.{TerminalColors.RESET}")
                 continue
 
             # Standard Query
@@ -183,8 +230,11 @@ def run_interactive_repl(pipeline: RAGPipeline):
 def main():
     parser = argparse.ArgumentParser(description="RAG Pipeline Terminal Operator CLI")
     parser.add_argument("--query", "-q", type=str, help="Execute single query and exit")
+    parser.add_argument("--agentic", "-a", action="store_true", help="Execute query via Autonomous ReAct Agent Planner")
+    parser.add_argument("--graph", "-g", action="store_true", help="Execute query via GraphRAG global community engine")
     parser.add_argument("--ingest", "-i", type=str, help="Ingest document before running")
     parser.add_argument("--hyde", action="store_true", help="Enable HyDE zero-shot dense query synthesis")
+    parser.add_argument("--mmr", action="store_true", help="Enable Maximal Marginal Relevance diversity reranking")
     args = parser.parse_args()
 
     pipeline = RAGPipeline()
@@ -198,10 +248,26 @@ def main():
             sys.exit(1)
 
     if args.query:
-        t0 = time.perf_counter()
-        resp = pipeline.query(args.query, use_cache=True, use_hyde=args.hyde)
-        total_ms = (time.perf_counter() - t0) * 1000
-        print(format_response_card(resp, total_ms))
+        if args.agentic:
+            t0 = time.perf_counter()
+            agentic_res = pipeline.agentic_query(args.query)
+            dt = (time.perf_counter() - t0) * 1000
+            print(f"\n{TerminalColors.BOLD}=== AGENTIC PLAN STEPS ==={TerminalColors.RESET}")
+            for step in agentic_res.steps:
+                print(f"  [Step {step.step_id}] {step.goal} -> {step.observation[:120]}")
+            print(f"\n{TerminalColors.BOLD}=== FINAL SYNTHESIS ==={TerminalColors.RESET}\n{agentic_res.final_synthesis}\n")
+            print(f"Execution Latency: {dt:.1f}ms")
+        elif args.graph:
+            graph_data = pipeline.graph_engine.global_query(args.query)
+            print(f"\n{TerminalColors.BOLD}=== GRAPHRAG RESULT ==={TerminalColors.RESET}")
+            print(f"  Seed Entities: {graph_data['seed_entities']}")
+            print(f"  Communities:   {len(graph_data['matched_communities'])}")
+            print(f"  Total Nodes:   {graph_data['total_graph_nodes']} | Edges: {graph_data['total_graph_edges']}")
+        else:
+            t0 = time.perf_counter()
+            resp = pipeline.query(args.query, use_cache=True, use_hyde=args.hyde, use_mmr=args.mmr)
+            total_ms = (time.perf_counter() - t0) * 1000
+            print(format_response_card(resp, total_ms))
     else:
         run_interactive_repl(pipeline)
 

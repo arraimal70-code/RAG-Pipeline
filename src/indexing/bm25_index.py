@@ -137,3 +137,15 @@ class BM25Index:
 
     def count(self) -> int:
         return len(self.chunks)
+
+    def clear(self) -> None:
+        """Clear BM25 index from memory and disk."""
+        self.bm25 = None
+        self.chunks = []
+        index_file = self.index_dir / "bm25.pkl"
+        meta_file = self.index_dir / "bm25_meta.json"
+        if index_file.exists():
+            index_file.unlink()
+        if meta_file.exists():
+            meta_file.unlink()
+        logger.info("BM25 index cleared.")

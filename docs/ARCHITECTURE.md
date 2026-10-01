@@ -121,3 +121,110 @@ Numerical claims undergo exact programmatic token and arithmetic verification.
 For CI/CD pipelines, air-gapped security deployments, and automated testing, the system provides zero-dependency fallbacks:
 - **`DeterministicTermVectorEmbedder`**: 384-dimensional subword n-gram TF-IDF projection delivering reproducible cosine similarity without requiring multi-gigabyte neural weights or GPU runtimes.
 - **`DeterministicGroundedGenerator`**: Salient sentence extraction with strict lexical overlap scoring, ensuring 100% test reproducibility without OpenAI API keys.
+
+---
+
+## 8. In-Memory GraphRAG & Entity-Relationship Network Engine
+
+Standard vector and lexical search fundamentally fail on global, thematic, and relational queries (e.g., *"What are the overarching strategic risks across all divisions?"* or *"How is Entity A connected to Entity B across multiple filings?"*).
+
+```mermaid
+flowchart TD
+    IngestChunk[Text Chunk] --> EntityExtractor[Regex & Rule Entity Extractor]
+    EntityExtractor --> NodeAdd[Node Registration:\nORGANIZATION, METRIC, TEMPORAL, LOCATION]
+    EntityExtractor --> RelationBuilder[Sentence-Level Co-occurrence Linker]
+    RelationBuilder --> AdjGraph[(In-Memory Knowledge Graph)]
+    AdjGraph --> CommunityDetector[BFS Connected Component Clusterer]
+    CommunityDetector --> MacroSummaries[Community Summaries & Thematic Clusters]
+    MacroSummaries --> GlobalSearch[GraphRAG Global Search Engine]
+```
+
+### Knowledge Graph Formalism
+The knowledge graph is modeled as \( G = (V, E) \) where:
+- \( V \) is the set of entity nodes \( v_i = (\text{name}, \text{type}, \text{mentions}, \text{chunks}) \).
+- \( E \) is the set of weighted edges \( e_{ij} = (v_i, v_j, w_{ij}, \text{relation}) \).
+
+When a query arrives:
+1. Seed entities mentioned in the query are matched against \( V \).
+2. A \( k \)-hop subgraph neighborhood is traversed:
+   \[
+   N_k(v) = \{ u \in V \mid \text{dist}(u, v) \le k \}
+   \]
+3. Thematic communities partition \( V \) into dense clusters \( C_1, C_2, \dots, C_p \), synthesizing macro-summaries that vector search alone cannot discover.
+
+---
+
+## 9. Autonomous Multi-Step Agentic ReAct Query Planner
+
+Standard RAG operates in a single pass (*retrieve once, generate once*). For complex comparative, multi-entity, or multi-year questions, single-shot retrieval suffers from context dilution and factual collision.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Planner as Agentic ReAct Planner
+    participant Pipeline as RAG Pipeline Core
+    participant Verifier as Evidence & Conflict Verifier
+
+    User->>Planner: Complex Query (e.g. "Compare Apple vs Microsoft margins")
+    Planner->>Planner: Plan-and-Solve: Decompose into Step DAG
+    loop For each Plan Step
+        Planner->>Pipeline: Execute Isolated Sub-Query (Entity A)
+        Pipeline-->>Planner: Return Grounded Observation + Citations
+        Planner->>Verifier: Evaluate Intermediate Evidence
+        alt Evidence Incomplete
+            Planner->>Planner: Dynamic ReAct Reflection: Generate Drill-Down Step
+        end
+    end
+    Planner->>Verifier: Cross-Document Conflict & Chronology Check
+    Planner->>User: Synthesized Multi-Source Grounded Answer
+```
+
+### ReAct Loop Mechanics
+1. **Thought**: Diagnoses requirements for the sub-task (e.g., *"Isolate Google Cloud 2023 revenue before comparing with AWS"*).
+2. **Action**: Dispatches an isolated sub-query with adapted retrieval policy.
+3. **Observation**: Records intermediate answers, confidence, and citation spans.
+4. **Reflection**: If evidence is partial or abstained, autonomously appends a drill-down recovery step.
+
+---
+
+## 10. Parent-Child Small-to-Big Hierarchical Retrieval
+
+A fundamental trade-off exists in dense retrieval:
+- **Small chunks (100–200 tokens)** produce sharp, noise-free vector embeddings that match query vectors with high cosine fidelity.
+- **Large chunks (600–1200 tokens)** provide the LLM with sufficient context, table headers, and qualifying clauses to generate accurate, non-hallucinatory answers.
+
+The **`HierarchicalRetriever`** bridges this gap:
+1. Large **Parent Chunks** are created along natural section and paragraph boundaries.
+2. Fine-grained **Child Chunks** are generated from each parent, linked via `parent_id`.
+3. Dense retrieval queries the Child Chunks in ChromaDB.
+4. Retrieved child chunks are expanded back to their Parent Chunks.
+5. Adjacent or overlapping parent windows are merged to deliver clean, unfragmented context to the generator.
+
+---
+
+## 11. Maximal Marginal Relevance (MMR) Diversity Reranker
+
+Top-K retrieval from dense and BM25 systems frequently produces redundant near-duplicate passages from the same section or boilerplate headers.
+
+To maximize information gain across diverse document sections, the pipeline implements Carbonell & Goldstein's **Maximal Marginal Relevance (MMR)**:
+
+\[
+\text{MMR}(q, D) = \arg\max_{d_i \in D \setminus S} \left[ \lambda \cdot \text{Sim}(d_i, q) - (1 - \lambda) \cdot \max_{d_j \in S} \text{Sim}(d_i, d_j) \right]
+\]
+
+Where:
+- \( D \) is the set of candidate passages retrieved by hybrid search.
+- \( S \) is the subset of already selected diverse passages.
+- \( \lambda \in [0.0, 1.0] \) tunes the trade-off between query relevance (\( \lambda \to 1.0 \)) and passage diversity (\( \lambda \to 0.0 \)).
+
+---
+
+## 12. Brutal Stress, Chaos & Concurrency Resilience
+
+The pipeline has been hardened through adversarial and chaotic stress testing:
+- **Thread-Safe Concurrent Execution**: Thread-safe `threading.RLock()` synchronization protects the in-memory semantic cache and index structures under 20+ parallel query threads.
+- **Logit Calibration**: Raw cross-encoder logits (\( -\infty, +\infty \)) are mapped into calibrated probabilities via numerical sigmoid transforms (\( \sigma(x) \)), preventing false abstentions on high-quality evidence.
+- **Adversarial Sanitization**: Strips zero-width characters (`\u200B`, `\uFEFF`), RTL overrides (`\u202E`), SQLi polyglots, and prompt jailbreak attempts.
+- **Defensive Math Safeguards**: Programmatic numerical reasoning prevents division-by-zero, handles negative percentage margins, and normalizes disparate financial units.
+

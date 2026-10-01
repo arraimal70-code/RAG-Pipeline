@@ -30,6 +30,10 @@ from src.generation.generator import Generator
 from src.citations.validator import CitationValidator
 from src.claims.extractor import ClaimExtractor
 from src.cache.semantic_cache import SemanticCache
+from src.graph.graph_rag import GraphRAGEngine
+from src.agentic.planner import AgenticRAGPlanner, AgenticPlanResult
+from src.retrieval.hierarchical import HierarchicalRetriever, HierarchicalChunker
+from src.retrieval.mmr import MaximalMarginalRelevanceReranker
 from src.observability.tracing import tracer
 from src.security.validator import DocumentValidator, QueryValidator
 
@@ -99,11 +103,15 @@ class RAGPipeline:
         self.citation_validator = CitationValidator()
         self.claim_extractor = ClaimExtractor()
         
-        # Advanced SOTA components
+        # Advanced SOTA & GOD-LEVEL components
         self.query_decomposer = QueryDecomposer()
         self.hyde_generator = HypotheticalDocumentGenerator(self.embedder)
         self.crag_engine = CorrectiveRAGEngine()
         self.semantic_cache = SemanticCache(embedder=self.embedder)
+        self.graph_engine = GraphRAGEngine()
+        self.agentic_planner = AgenticRAGPlanner()
+        self.hierarchical_retriever = HierarchicalRetriever()
+        self.mmr_reranker = MaximalMarginalRelevanceReranker(embedder=self.embedder)
         
         # Security
         self.document_validator = DocumentValidator()
@@ -180,6 +188,11 @@ class RAGPipeline:
                 logger.info("Building BM25 index")
                 self.bm25_index.build(chunks)
                 
+                # Index into Knowledge Graph
+                logger.info("Indexing chunks into Knowledge Graph")
+                for c in chunks:
+                    self.graph_engine.index_chunk(c)
+                
                 result = {
                     "document_id": metadata.document_id,
                     "filename": metadata.filename,
@@ -195,8 +208,31 @@ class RAGPipeline:
                 logger.error(f"Failed to ingest document {path.name}: {e}")
                 self.error_count += 1
                 raise DocumentIngestionError(f"Document ingestion failed: {e}") from e
+
+    def clear(self) -> None:
+        """Clear all indexed documents, vector store, lexical indices, graph, and caches."""
+        self.vector_index.clear()
+        self.bm25_index.clear()
+        self.semantic_cache.clear()
+        self.graph_engine.clear()
+        self.hierarchical_retriever.clear()
+        logger.info("Pipeline indices, graph, and caches cleared.")
+
+    def agentic_query(self, question: str) -> AgenticPlanResult:
+        """
+        Execute an autonomous multi-step ReAct agent plan with iterative retrieval,
+        dynamic drill-down, and cross-document synthesis.
+        """
+        return self.agentic_planner.execute_plan(question, self)
     
-    def query(self, question: str, use_cache: bool = True, use_hyde: bool = False) -> QueryResponse:
+    def query(
+        self,
+        question: str,
+        use_cache: bool = True,
+        use_hyde: bool = False,
+        use_mmr: bool = False,
+        use_graph: bool = True,
+    ) -> QueryResponse:
         """
         Process a query through the full pipeline with comprehensive validation.
         
@@ -204,6 +240,8 @@ class RAGPipeline:
             question: The question to answer
             use_cache: Whether to check/populate the semantic cache
             use_hyde: Whether to apply Hypothetical Document Embeddings
+            use_mmr: Whether to apply Maximal Marginal Relevance diversity reranking
+            use_graph: Whether to enrich query response with GraphRAG entity networks
             
         Returns:
             QueryResponse with answer, citations, and metadata
@@ -280,6 +318,15 @@ class RAGPipeline:
                 retrieval = self.temporal_reasoner.filter_by_temporal_relevance(
                     question, retrieval
                 )
+
+                # Stage 4b: MMR Diversity Reranking
+                if use_mmr and len(retrieval.candidates) > 1:
+                    logger.info("Applying Maximal Marginal Relevance (MMR) diversity reranking")
+                    retrieval.candidates = self.mmr_reranker.rerank(
+                        question, retrieval.candidates, top_k=min(5, len(retrieval.candidates))
+                    )
+                    retrieval.total_candidates = len(retrieval.candidates)
+                    retrieval.method_details["mmr"] = {"enabled": True}
                 
                 # Stage 5: Evidence sufficiency assessment
                 logger.info("Assessing evidence sufficiency")
@@ -387,6 +434,16 @@ class RAGPipeline:
                     "utility_score": self_critique.utility_score,
                     "notes": self_critique.critique_notes,
                 }
+
+                # Stage 11: GraphRAG Entity & Community Context
+                if use_graph:
+                    graph_meta = self.graph_engine.global_query(question)
+                    response.retrieval_metadata["graph_rag"] = {
+                        "seed_entities": graph_meta["seed_entities"],
+                        "matched_communities": len(graph_meta["matched_communities"]),
+                        "total_graph_nodes": graph_meta["total_graph_nodes"],
+                        "total_graph_edges": graph_meta["total_graph_edges"],
+                    }
 
                 # Populate semantic cache if answer is verified and not abstained
                 if use_cache and not response.abstained and response.confidence >= 0.5:

@@ -94,7 +94,10 @@ class EvidenceSufficiencyChecker:
         )
 
         # Determine recommendation
-        if evidence_score >= self.cfg.min_evidence_score:
+        if coverage_signal < 0.15 or score_signal < 0.10:
+            recommendation = "abstain"
+            is_sufficient = False
+        elif evidence_score >= self.cfg.min_evidence_score:
             recommendation = "answer"
             is_sufficient = True
         elif len(retrieval.candidates) < 5:
@@ -127,16 +130,25 @@ class EvidenceSufficiencyChecker:
 
         High top-1 score + good score distribution = high quality.
         Low scores across the board = poor retrieval.
+        Supports both normalized similarity scores and raw cross-encoder logits.
         """
         if not retrieval.candidates:
             return 0.0
 
-        top_score = retrieval.candidates[0].score
-        avg_score = sum(c.score for c in retrieval.candidates) / len(retrieval.candidates)
+        import math
 
-        # Normalize: scores above 0.7 are good, below 0.3 are poor
-        top_normalized = min(top_score / 0.7, 1.0)
-        avg_normalized = min(avg_score / 0.5, 1.0)
+        def calibrate_score(s: float) -> float:
+            if 0.0 <= s <= 1.0:
+                return s
+            # Sigmoid calibration for cross-encoder logits
+            return 1.0 / (1.0 + math.exp(-max(min(s, 15.0), -15.0)))
+
+        top_score = calibrate_score(retrieval.candidates[0].score)
+        avg_score = sum(calibrate_score(c.score) for c in retrieval.candidates) / len(retrieval.candidates)
+
+        # Normalize: calibrated scores above 0.5 are relevant
+        top_normalized = max(0.0, min(top_score / 0.6, 1.0))
+        avg_normalized = max(0.0, min(avg_score / 0.4, 1.0))
 
         return (top_normalized * 0.6 + avg_normalized * 0.4)
 

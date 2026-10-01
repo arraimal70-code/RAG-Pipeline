@@ -215,22 +215,32 @@ for citation in response.citations:
 
 ### Interactive Terminal CLI & Operator Console
 
-The pipeline includes an interactive terminal console with live querying, citation tracing, CRAG action monitoring, and semantic cache telemetry:
+The pipeline includes an interactive terminal console with live querying, autonomous ReAct agent execution, GraphRAG global traversal, citation tracing, CRAG action monitoring, and semantic cache telemetry:
 
 ```bash
 # Launch interactive REPL
 python src/cli.py
 
-# Or execute a single zero-shot query with HyDE enabled
-python src/cli.py --query "Compare operating margins of Alphabet vs Microsoft in 2024" --hyde
+# Execute an autonomous multi-step ReAct agent plan
+python src/cli.py --query "Track Alphabet vs Microsoft cloud revenue from 2022 to 2024" --agentic
+
+# Execute GraphRAG global community search
+python src/cli.py --query "What are the primary operational risks across divisions?" --graph
+
+# Execute single zero-shot query with HyDE and MMR diversity reranking
+python src/cli.py --query "Compare operating margins of Alphabet vs Microsoft in 2024" --hyde --mmr
 ```
 
 **Console Features:**
+- `/agentic <query>`: Autonomous multi-step ReAct planning, isolated sub-queries, and multi-source synthesis.
+- `/graph <query>`: GraphRAG global entity discovery, relationship graph extraction, and community summaries.
+- `/mmr`: Toggle Maximal Marginal Relevance diversity reranking on/off.
 - `/query <question>`: Real-time query execution with color-coded confidence, citations, and latency telemetry.
-- `/ingest <path>`: Live ingestion of PDF, TXT, or Markdown documents with contextual chunking.
+- `/ingest <path>`: Live ingestion of PDF, TXT, or Markdown documents with contextual chunking and knowledge graph indexing.
 - `/cache`: Inspect semantic cache metrics (lookups, hits, hit rate, LRU count).
 - `/cache-clear`: Flush semantic cache entries.
-- `/stats`: Display vector and BM25 index corpus statistics.
+- `/clear`: Reset all vector stores, BM25 indices, knowledge graphs, and caches.
+- `/stats`: Display vector, BM25, and GraphRAG corpus statistics.
 
 ---
 
@@ -266,10 +276,12 @@ pytest tests/ -v
 | `test_query_decomposition.py` | Stanford DSPy-style multi-hop query decomposition | 3 | **PASS** |
 | `test_retrieval.py` | Reciprocal Rank Fusion (RRF) & hybrid interleaving | 6 | **PASS** |
 | `test_sota_extensions.py` | HyDE embeddings, CRAG refinement, Self-RAG critique, Semantic Cache | 10 | **PASS** |
+| `test_god_level.py` | GraphRAG, Agentic ReAct Planner, Hierarchical Small-to-Big, MMR | 8 | **PASS** |
+| `test_brutal_stress.py` | Concurrency torture, unicode tricks, massive payloads, needle-in-haystack | 9 | **PASS** |
 | `test_security.py` | Prompt injection detection, resource limits, file types | 13 | **PASS** |
 | `test_security_comprehensive.py` | Unicode tricks, path traversal, null bytes, API rate limiting | 20 | **PASS** |
 | `test_integration.py` | End-to-end pipeline, numerical reasoning, empty index | 15 | **PASS** |
-| **Total** | | **102** | **100% Passing** |
+| **Total** | | **119** | **100% Passing** |
 
 ---
 
@@ -299,4 +311,6 @@ If you utilize this architecture in your research or production systems, please 
 4. **Gao, L., Dai, X., Pan, F., & Callan, J.** (2023). *Precise Zero-Shot Dense Retrieval without Relevance Labels (HyDE)*. ACL 2023.
 5. **Yan, S., et al.** (2024). *Corrective Retrieval Augmented Generation (CRAG)*. arXiv:2401.15884.
 6. **Asai, A., et al.** (2024). *Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection*. ICLR 2024.
-7. **Cormack, G. V., Clarke, C. L., & Buettcher, S.** (2009). *Reciprocal rank fusion outperforms Condorcet and individual rank learning methods*. SIGIR 2009.
+7. **Edge, D., et al.** (2024). *From Local to Global: A Graph RAG Approach to Query-Focused Summarization*. Microsoft Research.
+8. **Carbonell, J., & Goldstein, J.** (1998). *The use of MMR, diversity-based reranking for reordering documents and producing summaries*. ACM SIGIR 1998.
+9. **Cormack, G. V., Clarke, C. L., & Buettcher, S.** (2009). *Reciprocal rank fusion outperforms Condorcet and individual rank learning methods*. SIGIR 2009.

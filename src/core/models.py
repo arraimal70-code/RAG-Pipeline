@@ -65,6 +65,7 @@ class QueryType(str, Enum):
     MULTI_HOP = "multi_hop"   # requires multiple passages → broader retrieval
     COMPARISON = "comparison" # compare entities → multi-document
     NUMERICAL = "numerical"   # numbers, arithmetic, metrics, financial figures
+    TEMPORAL = "temporal"     # multi-year, historical progression, dates
     UNKNOWN = "unknown"       # default
 
 
