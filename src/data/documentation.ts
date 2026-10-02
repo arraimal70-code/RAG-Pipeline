@@ -8,6 +8,32 @@ export interface DocFile {
 
 export const documentation: DocFile[] = [
   {
+    title: "Master Documentation",
+    path: "docs/DOCUMENTATION.md",
+    icon: "📖",
+    category: "Manual",
+    content: `# Enterprise-Grade Evidence-Aware Adaptive RAG Pipeline
+## Master Technical Documentation & System Reference Manual
+
+### Executive Summary
+The Enterprise Evidence-Aware Adaptive RAG Pipeline is a research-grade, production-hardened Retrieval-Augmented Generation platform engineered for mission-critical document intelligence (SEC financial filings, regulatory reports, legal contracts).
+
+### Key Architectural Pillars
+1. **Anthropic Contextual Retrieval**: Prepends document scope and section hierarchy to eliminate chunk context loss.
+2. **Stanford DSPy Query Decomposition**: Deconstructs multi-hop and comparative queries into atomic sub-queries.
+3. **Adaptive Hybrid Fusion (RRF)**: Dynamically routes weights between dense vector similarity and sparse Okapi BM25 based on query intent.
+4. **ColBERT Late-Interaction MaxSim**: Token-level alignment scoring preserving fine-grained numeric and semantic qualifiers.
+5. **Rocchio & RM3 Pseudo-Relevance Feedback (PRF)**: Automatic query expansion with cosine anti-drift guardrails.
+6. **Stanford FActScore Grounding**: Proposition-level claim verification and hallucination rate calculation.
+7. **Multi-Modal Table Linearization**: Transforms complex multi-column matrices into semantic row-column triples.
+8. **In-Memory GraphRAG**: Entity-relationship networks and BFS community cluster summaries.
+9. **Autonomous ReAct Agent Planner**: Multi-step plan-and-solve DAG with dynamic drill-down.
+10. **Zero-Key Offline Resiliency**: 100% testable and runnable offline with local embeddings and deterministic fallbacks.
+
+Refer to the complete offline document at docs/DOCUMENTATION.md for comprehensive mathematical formulas, 11-stage pipeline lifecycle walkthrough, and complete REST/CLI manuals.
+`
+  },
+  {
     title: "Project Audit",
     path: "docs/PROJECT_AUDIT.md",
     icon: "🔍",

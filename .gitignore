@@ -38,7 +38,7 @@ env/
 *~
 
 # Data and models
-data/
+/data/
 chroma_db/
 bm25_index/
 logs/

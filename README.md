@@ -2,23 +2,27 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://python.org)
 [![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg)]()
+[![Documentation](https://img.shields.io/badge/Docs-Master%20Technical%20Manual-blueviolet.svg)](docs/DOCUMENTATION.md)
 [![Retrieval](https://img.shields.io/badge/Retrieval-Anthropic%20Contextual%20%2B%20Dense%2FBM25%20RRF-orange.svg)]()
 [![Grounding](https://img.shields.io/badge/Grounding-Stanford%20FActScore%20Atomic%20Verification-purple.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)]()
 
 > A production-grade Retrieval-Augmented Generation (RAG) system engineered for high-assurance document intelligence, financial report reasoning, and mission-critical question answering. Features **Anthropic Contextual Retrieval**, **Stanford DSPy-style multi-hop query decomposition**, **Stanford FActScore atomic claim verification**, **Self-RAG reflection loops**, **programmatic numerical reasoning**, and **zero-key offline testability**.
 
+📖 **[Read the Complete Master Technical Documentation & System Reference Manual](docs/DOCUMENTATION.md)**
+
 ---
 
 ## Table of Contents
-1. [Theoretical Architecture & Innovations](#theoretical-architecture--innovations)
-2. [Mathematical Formulations](#mathematical-formulations)
-3. [End-to-End Pipeline Workflow](#end-to-end-pipeline-workflow)
-4. [Quantitative Empirical Benchmarks](#quantitative-empirical-benchmarks)
-5. [Key Components](#key-components)
-6. [Quickstart & Zero-Key Offline Execution](#quickstart--zero-key-offline-execution)
-7. [Comprehensive Test Suite](#comprehensive-test-suite)
-8. [Frontend Visual Trace Dashboard](#frontend-visual-trace-dashboard)
+1. [Master Technical Documentation Manual](docs/DOCUMENTATION.md)
+2. [Theoretical Architecture & Innovations](#theoretical-architecture--innovations)
+3. [Mathematical Formulations](#mathematical-formulations)
+4. [End-to-End Pipeline Workflow](#end-to-end-pipeline-workflow)
+5. [Quantitative Empirical Benchmarks](#quantitative-empirical-benchmarks)
+6. [Key Components](#key-components)
+7. [Quickstart & Zero-Key Offline Execution](#quickstart--zero-key-offline-execution)
+8. [Comprehensive Test Suite](#comprehensive-test-suite)
+9. [Frontend Visual Trace Dashboard](#frontend-visual-trace-dashboard)
 
 ---
 
