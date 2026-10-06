@@ -350,8 +350,6 @@ def main():
             print(format_response_card(resp, total_ms))
     else:
         run_interactive_repl(pipeline)
-    else:
-        run_interactive_repl(pipeline)
 
 
 if __name__ == "__main__":

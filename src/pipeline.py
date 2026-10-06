@@ -2,6 +2,7 @@
 Production-ready RAG Pipeline with comprehensive error handling, monitoring, and validation.
 """
 
+import re
 import time
 import logging
 import json

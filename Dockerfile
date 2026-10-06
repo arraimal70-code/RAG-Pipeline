@@ -25,7 +25,6 @@ COPY --from=builder /install /usr/local
 COPY src/ ./src/
 COPY benchmarks/ ./benchmarks/
 COPY experiments/ ./experiments/
-COPY configs/ ./configs/
 
 RUN mkdir -p data/documents data/chroma_db data/bm25_index logs
 
