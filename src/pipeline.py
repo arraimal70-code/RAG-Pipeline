@@ -23,25 +23,27 @@ from src.adaptive.query_analyzer import QueryAnalyzer
 from src.adaptive.policy import policy_generator
 from src.adaptive.query_decomposer import QueryDecomposer
 from src.retrieval.hybrid_retriever import HybridRetriever
-from src.retrieval.hyde import HypotheticalDocumentGenerator
 from src.reasoning.numerical import NumericalReasoner
 from src.reasoning.temporal import TemporalReasoner
 from src.evidence.sufficiency import EvidenceSufficiencyChecker
-from src.evidence.crag import CorrectiveRAGEngine
 from src.generation.generator import Generator
 from src.citations.validator import CitationValidator
 from src.claims.extractor import ClaimExtractor
 from src.cache.semantic_cache import SemanticCache
-from src.graph.graph_rag import GraphRAGEngine
-from src.agentic.planner import AgenticRAGPlanner, AgenticPlanResult
-from src.retrieval.hierarchical import HierarchicalRetriever, HierarchicalChunker
-from src.retrieval.mmr import MaximalMarginalRelevanceReranker
-from src.retrieval.late_interaction import LateInteractionScorer
-from src.retrieval.prf import PseudoRelevanceFeedbackEngine
 from src.adaptive.query_rewriter import QueryRewriter
 from src.parsing.table_parser import TableParser
 from src.observability.tracing import tracer
 from src.security.validator import DocumentValidator, QueryValidator
+
+# Experimental & Research extensions
+from src.experimental.hyde import HypotheticalDocumentGenerator
+from src.experimental.crag import CorrectiveRAGEngine
+from src.experimental.graph_rag import GraphRAGEngine
+from src.experimental.agentic_planner import AgenticRAGPlanner, AgenticPlanResult
+from src.experimental.hierarchical import HierarchicalRetriever, HierarchicalChunker
+from src.experimental.mmr import MaximalMarginalRelevanceReranker
+from src.experimental.late_interaction import LateInteractionScorer
+from src.experimental.prf import PseudoRelevanceFeedbackEngine
 
 logger = logging.getLogger(__name__)
 
