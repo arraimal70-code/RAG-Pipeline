@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 from src.core.models import (
     TextChunk, RetrievalResult, RetrievalOutput, QueryResponse
 )
-from src.retrieval.hyde import HypotheticalDocumentGenerator
-from src.evidence.crag import CorrectiveRAGEngine, CRAGAction
+from src.experimental.hyde import HypotheticalDocumentGenerator
+from src.experimental.crag import CorrectiveRAGEngine, CRAGAction
 from src.cache.semantic_cache import SemanticCache
 from src.pipeline import RAGPipeline
 

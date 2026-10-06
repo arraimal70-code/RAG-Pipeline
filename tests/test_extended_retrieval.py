@@ -1,13 +1,11 @@
 r"""
-tests/test_chaos_extended.py — Brutal Torture, Chaos & SOTA Verification Test Suite.
-
-Torture-tests the 4 research-grade architectural additions:
+tests/test_extended_retrieval.py — Verification and resilience test suite for extended retrieval methods:
 1. ColBERT-style Late-Interaction Token MaxSim Scoring & Alignments
 2. Rocchio & RM3 Pseudo-Relevance Feedback (PRF) with Anti-Drift Guardrails
 3. Conversational Coreference Normalizer & Relative Temporal Grounder
 4. Markdown Table & Matrix Linearization Engine
-5. High-concurrency 30-thread stress under all SOTA modules combined
-6. Adversarial malformed table payloads, unicode explosions, and zero-token inputs
+5. High-concurrency query execution across retrieval modules
+6. Adversarial malformed table payloads, unicode handling, and edge-case inputs
 """
 
 import os
@@ -21,8 +19,8 @@ from typing import List
 
 from src.pipeline import RAGPipeline
 from src.core.models import TextChunk, RetrievalResult, QueryType
-from src.retrieval.late_interaction import LateInteractionScorer, TokenAlignment
-from src.retrieval.prf import PseudoRelevanceFeedbackEngine
+from src.experimental.late_interaction import LateInteractionScorer, TokenAlignment
+from src.experimental.prf import PseudoRelevanceFeedbackEngine
 from src.adaptive.query_rewriter import QueryRewriter
 from src.parsing.table_parser import TableParser, ParsedTable
 from src.embeddings.embedder import DeterministicTermVectorEmbedder

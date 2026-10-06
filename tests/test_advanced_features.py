@@ -1,18 +1,18 @@
 """
-tests/test_god_level.py — Comprehensive tests for GOD-LEVEL architecture:
+tests/test_advanced_features.py — Comprehensive tests for advanced research architecture:
 1. In-Memory GraphRAG (Entity extraction, co-occurrence edges, community detection, global query)
 2. Autonomous Multi-Step Agentic ReAct Planner (Plan DAG, iterative execution, drill-down)
 3. Parent-Child Small-to-Big Hierarchical Indexing & Context Expansion
 4. Maximal Marginal Relevance (MMR) Diversity Reranking
-5. End-to-End Pipeline Integration of all GOD-LEVEL components
+5. End-to-End Pipeline Integration of advanced components
 """
 
 import pytest
 from src.core.models import TextChunk, RetrievalResult, RetrievalOutput
-from src.graph.graph_rag import GraphRAGEngine, KnowledgeGraph
-from src.agentic.planner import AgenticRAGPlanner, StepStatus
-from src.retrieval.hierarchical import HierarchicalChunker, HierarchicalRetriever
-from src.retrieval.mmr import MaximalMarginalRelevanceReranker
+from src.experimental.graph_rag import GraphRAGEngine, KnowledgeGraph
+from src.experimental.agentic_planner import AgenticRAGPlanner, StepStatus
+from src.experimental.hierarchical import HierarchicalChunker, HierarchicalRetriever
+from src.experimental.mmr import MaximalMarginalRelevanceReranker
 
 
 class TestGraphRAG:

@@ -1,10 +1,10 @@
 """
-tests/test_brutal_stress.py — Brutal stress, chaos, concurrency, and adversarial torture tests.
+tests/test_stress.py — Stress, concurrency, and adversarial resilience tests.
 
-Validates the resilience of the pipeline under extreme conditions:
+Validates the resilience of the pipeline under challenging conditions:
 1. Multi-threaded concurrent query stress (race conditions, memory integrity)
-2. Adversarial payload torture (Unicode normalization, zero-width characters, RTL overrides, SQLi/polyglots)
-3. Massive payload handling (50k+ character queries, giant repeated token streams)
+2. Adversarial payload handling (Unicode normalization, zero-width characters, RTL overrides, SQLi/polyglots)
+3. Large payload handling (25k+ character queries, repeated token streams)
 4. Numerical edge cases (division by zero, negative percentages, currency mixing, scientific notation)
 5. Contradictory source evidence detection and resolution
 6. Semantic cache high-concurrency thrashing and eviction limits
@@ -20,11 +20,11 @@ from src.pipeline import RAGPipeline
 from src.core.models import TextChunk, RetrievalOutput, RetrievalResult, QueryResponse
 from src.reasoning.numerical import NumericalReasoner
 from src.cache.semantic_cache import SemanticCache
-from src.evidence.crag import CorrectiveRAGEngine, CRAGAction
+from src.experimental.crag import CorrectiveRAGEngine, CRAGAction
 
 
-class TestBrutalAdversarialTorture:
-    """Torture tests against sophisticated injection vectors and malformed payloads."""
+class TestAdversarialResilience:
+    """Resilience tests against injection vectors and malformed payloads."""
 
     def test_unicode_obfuscation_and_zero_width_chars(self, pipeline):
         """Query containing hidden zero-width spaces and homoglyphic unicode."""

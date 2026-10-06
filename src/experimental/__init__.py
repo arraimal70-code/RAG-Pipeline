@@ -20,7 +20,7 @@ from src.experimental.prf import PseudoRelevanceFeedbackEngine, PRFExpansionResu
 from src.experimental.late_interaction import LateInteractionScorer, MaxSimScore, TokenAlignment
 from src.experimental.hierarchical import HierarchicalRetriever, HierarchicalChunker
 from src.experimental.mmr import MaximalMarginalRelevanceReranker
-from src.experimental.crag import CorrectiveRAGEngine, CRAGAction, SelfReflectionCritique
+from src.experimental.crag import CorrectiveRAGEngine, CRAGAction, SelfRAGCritique
 
 __all__ = [
     "GraphRAGEngine",
@@ -39,5 +39,5 @@ __all__ = [
     "MaximalMarginalRelevanceReranker",
     "CorrectiveRAGEngine",
     "CRAGAction",
-    "SelfReflectionCritique",
+    "SelfRAGCritique",
 ]
