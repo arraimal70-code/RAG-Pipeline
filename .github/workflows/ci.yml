@@ -42,6 +42,12 @@ jobs:
       - name: Validate configuration
         run: python -c "from src.core.config import config; config.validate(); print('Config OK')"
 
+      - name: RAG Evaluation Regression Gate (Akber Shaikh 2026 Production Standard)
+        run: |
+          python benchmarks/run_benchmark.py --dataset benchmarks/verified_benchmark.json --samples 25 --fail-under-hit1 0.50 --fail-under-ndcg 0.65
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'mock-key' }}
+
   docker-build:
     runs-on: ubuntu-latest
     needs: lint-and-test

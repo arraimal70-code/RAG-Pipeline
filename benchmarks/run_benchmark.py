@@ -144,7 +144,8 @@ class BenchmarkRunner:
         for idx, item in enumerate(self.questions, 1):
             q_text = item["question"]
             is_answerable = item.get("answerable", True)
-            gold_sources = [s.lower().replace(".pdf", "") for s in item.get("gold_sources", [])]
+            raw_gold = item.get("gold_sources") or ([item.get("source_document")] if item.get("source_document") else [])
+            gold_sources = [s.lower().replace(".pdf", "").replace(".txt", "") for s in raw_gold if s]
 
             q_start = time.time()
             try:
@@ -300,10 +301,55 @@ def main():
         default=25,
         help="Maximum number of questions to evaluate",
     )
+    parser.add_argument(
+        "--fail-under-hit1",
+        type=float,
+        default=None,
+        help="CI regression gate: fail if Hit@1 is below this threshold (e.g. 0.50)",
+    )
+    parser.add_argument(
+        "--fail-under-ndcg",
+        type=float,
+        default=None,
+        help="CI regression gate: fail if NDCG@5 is below this threshold (e.g. 0.70)",
+    )
+    parser.add_argument(
+        "--fail-under-faithfulness",
+        type=float,
+        default=None,
+        help="CI regression gate: fail if claim faithfulness is below this threshold",
+    )
     args = parser.parse_args()
 
     runner = BenchmarkRunner(benchmark_file=Path(args.dataset), max_samples=args.samples)
-    runner.run()
+    summary = runner.run()
+
+    # CI regression gate assertions
+    failed_checks = []
+    if args.fail_under_hit1 is not None:
+        actual = summary["retrieval_metrics"]["Hit@1"]
+        if actual < args.fail_under_hit1:
+            failed_checks.append(f"Hit@1 failed gate: {actual:.2%} < threshold {args.fail_under_hit1:.2%}")
+
+    if args.fail_under_ndcg is not None:
+        actual = summary["retrieval_metrics"]["NDCG@5"]
+        if actual < args.fail_under_ndcg:
+            failed_checks.append(f"NDCG@5 failed gate: {actual:.4f} < threshold {args.fail_under_ndcg:.4f}")
+
+    if args.fail_under_faithfulness is not None:
+        actual = summary["generation_metrics"]["claim_level_faithfulness"]
+        if actual < args.fail_under_faithfulness:
+            failed_checks.append(f"Faithfulness failed gate: {actual:.2%} < threshold {args.fail_under_faithfulness:.2%}")
+
+    if failed_checks:
+        print("\n" + "!" * 65)
+        print("  CI EVALUATION REGRESSION GATE FAILED:")
+        for fc in failed_checks:
+            print(f"  - {fc}")
+        print("!" * 65 + "\n")
+        sys.exit(1)
+    elif args.fail_under_hit1 or args.fail_under_ndcg or args.fail_under_faithfulness:
+        print("\n[CI Gate] All benchmark regression quality thresholds PASSED successfully.\n")
 
 
 if __name__ == "__main__":
