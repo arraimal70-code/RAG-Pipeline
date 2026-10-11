@@ -64,3 +64,23 @@ This document records the architectural and engineering decisions taken in the `
 - **Context**: Test suites and offline benchmark evaluation must function in environments without internet access or GPU acceleration.
 - **Decision**: Implement `DeterministicTermVectorEmbedder` (384-dimensional subword term hashing) as an automatic fallback when heavy neural models or API keys are unavailable.
 - **Rationale**: Ensures that 100% of unit tests and regression checks run without external dependencies or cloud subscription fees.
+
+## ADR-013: NLI Premise-Hypothesis Grounding over Bag-of-Words Overlap
+- **Context**: Naive string matching / token set overlap falsely validates generated claims even when directional polarity is reversed (e.g. "increased" vs "decreased").
+- **Decision**: Implement `NLIVerifier` and `HallucinationGatekeeper` using Natural Language Inference (`ENTAILMENT`, `NEUTRAL`, `CONTRADICTION`).
+- **Rationale**: Directly detects antonym collisions, negation inversions, and numerical metric mismatches, enforcing strict pre-stream gating (Pass, Redact, Abstain).
+
+## ADR-014: Document AST & Small-to-Big Parent Document Context Expansion
+- **Context**: Fixed chunking slices documents indiscriminately, severing table rows from column headers and discarding section hierarchies.
+- **Decision**: Implement `DocumentASTBuilder` and `HierarchicalChunker`. Index fine-grained child chunks (128-256 tokens) for precision retrieval, but expand to enclosing parent section AST context for LLM generation.
+- **Rationale**: Resolves the classic RAG dilemma between retrieval specificity and generation context depth.
+
+## ADR-015: Contextual Extractive Compression for Noise Pruning
+- **Context**: Retrieved chunks often contain 70%+ irrelevant sentences, inducing the "Lost-in-the-Middle" hallucination effect.
+- **Decision**: Implement `ContextualCompressor` to score chunk sentences against the query and prune low-salience noise prior to prompt assembly.
+- **Rationale**: Maximizes prompt signal-to-noise ratio, lowers generation token latency, and prevents distractor hallucination.
+
+## ADR-016: Automated Entity Resolution in Enterprise Knowledge Graph
+- **Context**: Financial filings mention entities under multiple surface aliases ("Alphabet", "Google", "Alphabet Inc.", "GOOGL"). Naive graphs create disconnected duplicate nodes.
+- **Decision**: Implement `EntityResolver` to normalize corporate suffixes, unify aliases into canonical `EntityNode` records, and support openCypher export for enterprise graph databases.
+- **Rationale**: Enables reliable multi-hop relational traversal without entity fragmentation.

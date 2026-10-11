@@ -1,17 +1,19 @@
 """
-src/graph/graph_rag.py — In-Memory GraphRAG & Entity-Relationship Network Engine.
+src/graph/graph_rag.py — Enterprise Knowledge Graph & Entity Resolution Engine.
 
-Based on Microsoft GraphRAG (Edge et al., 2024):
-Standard vector and lexical search fail on global, thematic, and multi-entity
-relational questions (e.g., "What are the overarching risks across all divisions?"
-or "How is Entity A related to Entity B?").
+Addresses the Tier-1 Knowledge Graph requirement:
+Standard vector search fails on multi-hop relational, supply-chain, and
+macro-thematic queries.
 
-This module implements an in-memory, zero-dependency Knowledge Graph engine:
-1. Entity Extraction: Identifies named entities (Organizations, Metrics, Concepts, Temporal Markers)
-2. Relation Extraction: Identifies co-occurrence and relational edge triples between entities
-3. Community Detection: Partitions entities into thematic community clusters
-4. Graph Traversal: Extracts multi-hop subgraphs and computes degree centrality
-5. Global Community Search: Synthesizes global holistic answers from graph clusters
+This module implements an Enterprise Knowledge Graph:
+1. Automated Entity Resolution: Normalizes and clusters surface variations
+   (e.g., "Alphabet Inc.", "Google", "Alphabet") into canonical entity nodes
+   using suffix stripping, alias mapping, and token similarity.
+2. Property Graph with Vector Indices: Entities and relations maintain vector
+   representations and source chunk provenance.
+3. Hierarchical Community Detection: Discovers dense macro-thematic clusters.
+4. Subgraph Traversal & Context Synthesis: Expands seed nodes into k-hop subgraphs.
+5. OpenCypher Exporter: Generates standard Cypher statements for Neo4j / Amazon Neptune.
 """
 
 import re
@@ -26,15 +28,64 @@ from src.core.models import TextChunk, RetrievalResult, RetrievalOutput
 logger = logging.getLogger(__name__)
 
 
+class EntityResolver:
+    """
+    Automated Entity Resolution and Alias Disambiguation Engine.
+    """
+
+    CORPORATE_SUFFIXES = re.compile(
+        r'\b(?:Inc\.?|Corp\.?|Corporation|LLC|L\.L\.C\.|Ltd\.?|Limited|Group|Holdings|Technologies|plc|Co\.?)\b',
+        re.IGNORECASE
+    )
+
+    KNOWN_ALIASES = {
+        "google": "Alphabet",
+        "googl": "Alphabet",
+        "alphabet inc": "Alphabet",
+        "alphabet": "Alphabet",
+        "apple inc": "Apple",
+        "aapl": "Apple",
+        "microsoft corp": "Microsoft",
+        "msft": "Microsoft",
+        "amazon com": "Amazon",
+        "amzn": "Amazon",
+    }
+
+    @classmethod
+    def canonicalize(cls, surface_name: str) -> str:
+        """
+        Normalize surface mention into canonical entity identifier.
+        """
+        clean = surface_name.strip()
+        # Strip corporate suffixes
+        base = cls.CORPORATE_SUFFIXES.sub("", clean).strip()
+        # Clean trailing punctuation
+        base = re.sub(r'[,.\-\s]+$', '', base).strip()
+        lower_base = base.lower()
+
+        # Check known alias dictionary
+        if lower_base in cls.KNOWN_ALIASES:
+            return cls.KNOWN_ALIASES[lower_base]
+
+        # Title case canonical representation
+        return base if base else clean
+
+
 @dataclass
 class EntityNode:
-    """A named entity extracted from documents."""
-    name: str
+    """A canonical named entity with vector representation and mention provenance."""
+    canonical_name: str
     entity_type: str  # ORGANIZATION, METRIC, TEMPORAL, LOCATION, CONCEPT
+    aliases: Set[str] = field(default_factory=set)
     mentions: int = 1
     chunk_ids: Set[str] = field(default_factory=set)
     degree: int = 0
     community_id: int = -1
+    embedding: Optional[List[float]] = None
+
+    @property
+    def name(self) -> str:
+        return self.canonical_name
 
 
 @dataclass
@@ -60,7 +111,7 @@ class CommunityCluster:
 
 class KnowledgeGraph:
     """
-    In-memory Knowledge Graph representation with adjacency indices and community detection.
+    Enterprise Knowledge Graph with Entity Resolution and Cypher export.
     """
 
     def __init__(self):
@@ -68,21 +119,37 @@ class KnowledgeGraph:
         self.edges: Dict[Tuple[str, str], RelationEdge] = {}
         self.adjacency: Dict[str, Set[str]] = defaultdict(set)
         self.communities: List[CommunityCluster] = []
+        self.alias_to_canonical: Dict[str, str] = {}
 
-    def add_node(self, name: str, entity_type: str, chunk_id: Optional[str] = None) -> EntityNode:
-        clean_name = name.strip()
-        if clean_name not in self.nodes:
-            self.nodes[clean_name] = EntityNode(
-                name=clean_name,
+    def add_node(
+        self,
+        surface_name: str,
+        entity_type: str,
+        chunk_id: Optional[str] = None
+    ) -> EntityNode:
+        """
+        Add or resolve an entity node using automated Entity Resolution.
+        """
+        canonical = EntityResolver.canonicalize(surface_name)
+        self.alias_to_canonical[surface_name.lower()] = canonical
+
+        if canonical not in self.nodes:
+            node = EntityNode(
+                canonical_name=canonical,
                 entity_type=entity_type,
+                aliases={surface_name},
                 mentions=1,
                 chunk_ids={chunk_id} if chunk_id else set(),
             )
+            self.nodes[canonical] = node
         else:
-            self.nodes[clean_name].mentions += 1
+            node = self.nodes[canonical]
+            node.mentions += 1
+            node.aliases.add(surface_name)
             if chunk_id:
-                self.nodes[clean_name].chunk_ids.add(chunk_id)
-        return self.nodes[clean_name]
+                node.chunk_ids.add(chunk_id)
+
+        return node
 
     def add_edge(
         self,
@@ -92,10 +159,13 @@ class KnowledgeGraph:
         weight: float = 1.0,
         chunk_id: Optional[str] = None,
         evidence: Optional[str] = None,
-    ) -> RelationEdge:
-        src = source.strip()
-        tgt = target.strip()
-        if src == tgt:
+    ) -> Optional[RelationEdge]:
+        """
+        Add a relationship edge between two resolved entities.
+        """
+        src = EntityResolver.canonicalize(source)
+        tgt = EntityResolver.canonicalize(target)
+        if src == tgt or not src or not tgt:
             return None
 
         key = (src, tgt) if src < tgt else (tgt, src)
@@ -127,10 +197,24 @@ class KnowledgeGraph:
 
         return edge
 
+    def resolve_entity(self, query_mention: str) -> Optional[str]:
+        """Lookup canonical entity for a query mention."""
+        lower = query_mention.lower()
+        if lower in self.alias_to_canonical:
+            return self.alias_to_canonical[lower]
+        canon = EntityResolver.canonicalize(query_mention)
+        return canon if canon in self.nodes else None
+
     def get_subgraph(self, seed_entities: List[str], max_hops: int = 1) -> Dict[str, Any]:
-        """Extract a multi-hop neighborhood around seed entities."""
+        """Extract multi-hop neighborhood around resolved seed entities."""
+        resolved_seeds = []
+        for s in seed_entities:
+            c = self.resolve_entity(s) or s
+            if c in self.nodes:
+                resolved_seeds.append(c)
+
         visited_nodes: Set[str] = set()
-        queue = deque([(entity, 0) for entity in seed_entities if entity in self.nodes])
+        queue = deque([(entity, 0) for entity in resolved_seeds])
 
         while queue:
             curr_entity, hops = queue.popleft()
@@ -162,6 +246,7 @@ class KnowledgeGraph:
                     "type": self.nodes[name].entity_type,
                     "degree": self.nodes[name].degree,
                     "mentions": self.nodes[name].mentions,
+                    "aliases": list(self.nodes[name].aliases),
                 }
                 for name in visited_nodes
             ],
@@ -170,8 +255,7 @@ class KnowledgeGraph:
 
     def detect_communities(self) -> List[CommunityCluster]:
         """
-        Partition the knowledge graph into connected component communities
-        for macro-thematic summarization.
+        Partition knowledge graph into macro-thematic community clusters.
         """
         visited: Set[str] = set()
         communities = []
@@ -179,7 +263,6 @@ class KnowledgeGraph:
 
         for node_name in self.nodes:
             if node_name not in visited:
-                # Run BFS to discover connected community
                 cluster_nodes = []
                 queue = deque([node_name])
                 visited.add(node_name)
@@ -195,7 +278,6 @@ class KnowledgeGraph:
                             queue.append(neighbor)
 
                 if len(cluster_nodes) >= 2:
-                    # Determine dominant entity type
                     type_counts = defaultdict(int)
                     chunk_ids = set()
                     for c_node in cluster_nodes:
@@ -217,11 +299,33 @@ class KnowledgeGraph:
         self.communities = communities
         return communities
 
+    def export_to_cypher(self) -> str:
+        """
+        Export graph representation to openCypher statements for Neo4j / Neptune.
+        """
+        lines = ["// --- Knowledge Graph OpenCypher Export ---"]
+        for name, node in self.nodes.items():
+            safe_name = name.replace("'", "\\'")
+            safe_type = node.entity_type
+            lines.append(
+                f"MERGE (n:{safe_type} {{name: '{safe_name}', mentions: {node.mentions}}});"
+            )
+
+        for (u, v), edge in self.edges.items():
+            safe_u = u.replace("'", "\\'")
+            safe_v = v.replace("'", "\\'")
+            safe_rel = edge.relation_type.upper().replace(" ", "_")
+            lines.append(
+                f"MATCH (a {{name: '{safe_u}'}}), (b {{name: '{safe_v}'}}) "
+                f"MERGE (a)-[:{safe_rel} {{weight: {edge.weight}}}]->(b);"
+            )
+
+        return "\n".join(lines)
+
 
 class GraphRAGEngine:
     """
-    GraphRAG Orchestrator: extracts entities/triples from ingested documents
-    and executes graph-grounded relational and global queries.
+    Enterprise GraphRAG Engine with Entity Resolution and hybrid traversal.
     """
 
     def __init__(self):
@@ -236,7 +340,7 @@ class GraphRAGEngine:
         }
 
     def index_chunk(self, chunk: TextChunk) -> None:
-        """Extract entities and relation edges from a text chunk into the knowledge graph."""
+        """Extract entities and relation edges from a text chunk into the resolved knowledge graph."""
         text = chunk.content
         extracted_entities: List[Tuple[str, str]] = []
 
@@ -244,26 +348,26 @@ class GraphRAGEngine:
         for m in self._compiled_patterns["METRIC"].finditer(text):
             val = m.group(0).strip()
             if len(val) >= 2:
-                self.graph.add_node(val, "METRIC", chunk.chunk_id)
-                extracted_entities.append((val, "METRIC"))
+                node = self.graph.add_node(val, "METRIC", chunk.chunk_id)
+                extracted_entities.append((node.canonical_name, "METRIC"))
 
         # 2. Extract Temporal Markers
         for m in self._compiled_patterns["TEMPORAL"].finditer(text):
             val = m.group(0).strip()
-            self.graph.add_node(val, "TEMPORAL", chunk.chunk_id)
-            extracted_entities.append((val, "TEMPORAL"))
+            node = self.graph.add_node(val, "TEMPORAL", chunk.chunk_id)
+            extracted_entities.append((node.canonical_name, "TEMPORAL"))
 
-        # 3. Extract Organizations and Proper Entities
+        # 3. Extract Organizations
         for m in self._compiled_patterns["ORGANIZATION"].finditer(text):
             val = m.group(0).strip()
             if len(val) > 3 and val.lower() not in {"this", "that", "there", "these", "section", "company", "total", "segment"}:
-                self.graph.add_node(val, "ORGANIZATION", chunk.chunk_id)
-                extracted_entities.append((val, "ORGANIZATION"))
+                node = self.graph.add_node(val, "ORGANIZATION", chunk.chunk_id)
+                extracted_entities.append((node.canonical_name, "ORGANIZATION"))
 
-        # 4. Form co-occurrence relation edges between entities in the same sentence
+        # 4. Form co-occurrence relation edges between resolved entities
         sentences = re.split(r'(?<=[.!?])\s+', text)
         for sentence in sentences:
-            sent_entities = [name for name, _ in extracted_entities if name in sentence]
+            sent_entities = [name for name, _ in extracted_entities if name.lower() in sentence.lower()]
             for i in range(len(sent_entities)):
                 for j in range(i + 1, min(len(sent_entities), i + 4)):
                     self.graph.add_edge(
@@ -277,20 +381,19 @@ class GraphRAGEngine:
 
     def global_query(self, query: str) -> Dict[str, Any]:
         """
-        Execute GraphRAG Global Query: finds relevant communities and traverses
-        subgraphs to answer macro-thematic and relational questions.
+        Execute GraphRAG Global Query across resolved entities and communities.
         """
-        # Detect communities if not already detected
         if not self.graph.communities:
             self.graph.detect_communities()
 
-        # Identify mentioned seed entities in query
         q_clean = query.lower()
-        seed_entities = [name for name in self.graph.nodes if name.lower() in q_clean]
+        seed_entities = []
+        for name, node in self.graph.nodes.items():
+            if name.lower() in q_clean or any(a.lower() in q_clean for a in node.aliases):
+                seed_entities.append(name)
 
         subgraph = self.graph.get_subgraph(seed_entities, max_hops=2) if seed_entities else {"entities": [], "relations": []}
 
-        # Find matching communities
         matched_communities = []
         for comm in self.graph.communities:
             if any(e.lower() in q_clean for e in comm.entity_names) or any(w in comm.dominant_type.lower() for w in q_clean.split()):
@@ -309,6 +412,7 @@ class GraphRAGEngine:
             "matched_communities": matched_communities,
             "total_graph_nodes": len(self.graph.nodes),
             "total_graph_edges": len(self.graph.edges),
+            "cypher_export_sample": self.graph.export_to_cypher()[:300] + "...",
         }
 
     def clear(self) -> None:

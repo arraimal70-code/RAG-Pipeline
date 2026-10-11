@@ -1,310 +1,140 @@
-# Enterprise RAG Pipeline System Architecture
+# Enterprise Tier-1 RAG Architecture Specification
 
-## 1. High-Level Architectural Philosophy
-
-Traditional Retrieval-Augmented Generation (RAG) models rely on a rigid linear paradigm: *Query → Embed → Retrieve Top-K → Generate Answer*. In production environments with unstructured documents (e.g., corporate 10-Ks, regulatory filings, medical clinical trials), this pipeline breaks down due to lack of reflection, inability to recognize context gaps, and absence of claim-level fact-checking.
-
-This system implements an **Adaptive Reflective Architecture** combining four state-of-the-art research paradigms:
-1. **Anthropic Contextual Retrieval (2024)**: Eliminates chunk-level information loss by prepending situated document breadcrumbs and semantic synopses.
-2. **Stanford DSPy-Style Query Decomposition**: Deconstructs comparative and multi-hop queries into orthogonal sub-queries for parallel multi-hop retrieval.
-3. **Adaptive Hybrid Fusion (RRF + Dynamic Routing)**: Re-weights dense semantic similarity vs. sparse Okapi BM25 lexical signals according to classified query intent.
-4. **Stanford FActScore Grounding (Min et al., 2023)**: Dissects generated answers into fine-grained atomic assertions, mathematically measuring claim-level support and hallucination rate.
+This document specifies the end-to-end architecture of the **Evidence-Aware RAG Pipeline**, engineered to meet the operational standards of Tier-1 production systems (e.g., Glean, Harvey, Perplexity).
 
 ---
 
-## 2. Ingestion & Contextual Indexing Pipeline
-
-```mermaid
-flowchart LR
-    A[Raw Document: PDF/TXT/MD] --> B[Parser & Metadata Extractor]
-    B --> C[Document Synopsis Engine]
-    C --> D[Anthropic Contextual Chunker]
-    D --> E1[Dense Embedder\nall-MiniLM-L6-v2 / Ada-002]
-    D --> E2[Sparse BM25 Indexer\nOkapi BM25]
-    E1 --> F1[(ChromaDB HNSW Index)]
-    E2 --> F2[(BM25 Inverted Index)]
-```
-
-### Contextual Chunking Mechanics
-When documents are split into fixed or recursive chunks, local sentences often lose their broader meaning (e.g., *"Operating revenue increased by 14% to \$12.3B"* without stating which company, fiscal period, or division).
-
-The `ContextualChunker` constructs a situated prefix:
-```
-[Document: {filename} | Section: {heading_breadcrumb} | Scope: {document_synopsis}]
-{chunk_body}
-```
-Both the dense embedding vector \( \vec{v} \in \mathbb{R}^{384} \) and the sparse BM25 inverted index incorporate this contextual prefix, boosting retrieval Hit@K while preserving exact page and offset citations.
-
----
-
-## 3. Adaptive Query Execution & Multi-Hop Decomposition
+## 1. System Topology & Data Flow
 
 ```mermaid
 flowchart TD
-    UserQ[User Question] --> Sanitize[Security & Sanitization Guardrails]
-    Sanitize --> Classifier{Query Classifier}
-    Classifier -->|Exact Alphanumeric / Date| ExactPolicy[Weight: Lexical 70%, Dense 30%]
-    Classifier -->|Conceptual / Exploratory| ConceptPolicy[Weight: Dense 80%, Lexical 20%]
-    Classifier -->|Comparative / Multi-Hop| Decompose[DSPy Query Decomposer]
-    Classifier -->|Ambiguous Intent| AmbiguousPolicy[Expansion Multiplier: 2.0x]
-
-    Decompose --> SubQ1[Sub-Query 1: Entity A]
-    Decompose --> SubQ2[Sub-Query 2: Entity B]
-    SubQ1 & SubQ2 --> ParallelRetrieve[Parallel Hybrid Retrieval]
-```
-
-### Multi-Hop Query Decomposition (DSPy / IR-CoT)
-Queries involving comparisons (e.g., *"Compare Microsoft and Alphabet Cloud growth in FY2023"*) or multi-step logic cannot be resolved by a single embedding vector. The `QueryDecomposer`:
-1. Identifies comparative predicates (`compare`, `versus`, `difference between`).
-2. Extracts target entities and comparative metrics.
-3. Generates orthogonal retrieval queries for each entity.
-4. Merges candidate pools using Reciprocal Rank Fusion (RRF).
-
----
-
-## 4. Hybrid Reciprocal Rank Fusion & Cross-Encoder Reranking
-
-### Reciprocal Rank Fusion (RRF)
-To unify disparate dense cosine distances \( d_i \in [0, 2] \) and BM25 scores \( s_j \in [0, \infty) \), the pipeline implements weighted RRF:
-
-\[
-RRF(d) = w_{\text{dense}} \cdot \frac{1}{k + r_{\text{dense}}(d)} + w_{\text{bm25}} \cdot \frac{1}{k + r_{\text{bm25}}(d)}
-\]
-
-Where rank constant \( k = 60 \) smooths outlier scores.
-
-### Cross-Encoder Reranking
-Top-50 candidates from RRF fusion are passed to a cross-encoder model (`cross-encoder/ms-marco-MiniLM-L-6-v2`). Unlike bi-encoders that encode query and document independently, cross-encoders perform full cross-attention over all tokens in the `(query, document)` pair, capturing subtle lexical interactions, negations, and qualifiers.
-
----
-
-## 5. Evidence Sufficiency Assessment & Principled Abstention
-
-Before sending context to the generator, the `EvidenceChecker` evaluates four quantitative signals:
-
-1. **Retrieval Score Quality**: Average and maximum similarity scores of top candidates.
-2. **Question Coverage**:
-   \[
-   \text{Coverage}(q, C) = \frac{|\text{Tokens}(q) \cap \text{Tokens}(C)|}{|\text{Tokens}(q)|}
-   \]
-3. **Cross-Source Agreement**: Semantic consensus across multiple retrieved passages.
-4. **Contradiction Detection**: Flags numerical or temporal disparities between documents (e.g. preliminary vs. final filings).
-
-If \( \text{EvidenceScore} < \tau_{\text{abstain}} \), the pipeline emits an explicit abstention with `SupportLevel.INSUFFICIENT_EVIDENCE`, preventing hallucination.
-
----
-
-## 6. Grounded Generation & Stanford FActScore Verification
-
-```mermaid
-flowchart LR
-    Context[Validated Top Candidates] --> LLM[Grounded Generator\nChain-of-Thought]
-    LLM --> RawOutput[Raw Response + Inline Citations]
-    RawOutput --> CiteValidator[Span Citation Validator]
-    CiteValidator --> FActScore[Atomic Claim Extractor & Verifier]
-    FActScore --> ValidatedResponse[Validated QueryResponse Object]
-```
-
-### Claim-Level Grounding Formulation (Min et al., 2023)
-The answer is broken into independent atomic assertions \( A = \{a_1, a_2, \dots, a_m\} \). Each assertion is checked against retrieved chunks:
-
-\[
-\text{Faithfulness} = \frac{\sum_{i=1}^m \mathbb{I}(\text{Supported}(a_i))}{m}, \quad \text{Hallucination Rate} = \frac{\sum_{i=1}^m \mathbb{I}(\text{Unsupported}(a_i))}{m}
-\]
-
-Numerical claims undergo exact programmatic token and arithmetic verification.
-
----
-
-## 7. Zero-Key Offline Resiliency Architecture
-
-For CI/CD pipelines, air-gapped security deployments, and automated testing, the system provides zero-dependency fallbacks:
-- **`DeterministicTermVectorEmbedder`**: 384-dimensional subword n-gram TF-IDF projection delivering reproducible cosine similarity without requiring multi-gigabyte neural weights or GPU runtimes.
-- **`DeterministicGroundedGenerator`**: Salient sentence extraction with strict lexical overlap scoring, ensuring 100% test reproducibility without OpenAI API keys.
-
----
-
-## 8. In-Memory GraphRAG & Entity-Relationship Network Engine
-
-Standard vector and lexical search fundamentally fail on global, thematic, and relational queries (e.g., *"What are the overarching strategic risks across all divisions?"* or *"How is Entity A connected to Entity B across multiple filings?"*).
-
-```mermaid
-flowchart TD
-    IngestChunk[Text Chunk] --> EntityExtractor[Regex & Rule Entity Extractor]
-    EntityExtractor --> NodeAdd[Node Registration:\nORGANIZATION, METRIC, TEMPORAL, LOCATION]
-    EntityExtractor --> RelationBuilder[Sentence-Level Co-occurrence Linker]
-    RelationBuilder --> AdjGraph[(In-Memory Knowledge Graph)]
-    AdjGraph --> CommunityDetector[BFS Connected Component Clusterer]
-    CommunityDetector --> MacroSummaries[Community Summaries & Thematic Clusters]
-    MacroSummaries --> GlobalSearch[GraphRAG Global Search Engine]
-```
-
-### Knowledge Graph Formalism
-The knowledge graph is modeled as \( G = (V, E) \) where:
-- \( V \) is the set of entity nodes \( v_i = (\text{name}, \text{type}, \text{mentions}, \text{chunks}) \).
-- \( E \) is the set of weighted edges \( e_{ij} = (v_i, v_j, w_{ij}, \text{relation}) \).
-
-When a query arrives:
-1. Seed entities mentioned in the query are matched against \( V \).
-2. A \( k \)-hop subgraph neighborhood is traversed:
-   \[
-   N_k(v) = \{ u \in V \mid \text{dist}(u, v) \le k \}
-   \]
-3. Thematic communities partition \( V \) into dense clusters \( C_1, C_2, \dots, C_p \), synthesizing macro-summaries that vector search alone cannot discover.
-
----
-
-## 9. Autonomous Multi-Step Agentic ReAct Query Planner
-
-Standard RAG operates in a single pass (*retrieve once, generate once*). For complex comparative, multi-entity, or multi-year questions, single-shot retrieval suffers from context dilution and factual collision.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant Planner as Agentic ReAct Planner
-    participant Pipeline as RAG Pipeline Core
-    participant Verifier as Evidence & Conflict Verifier
-
-    User->>Planner: Complex Query (e.g. "Compare Apple vs Microsoft margins")
-    Planner->>Planner: Plan-and-Solve: Decompose into Step DAG
-    loop For each Plan Step
-        Planner->>Pipeline: Execute Isolated Sub-Query (Entity A)
-        Pipeline-->>Planner: Return Grounded Observation + Citations
-        Planner->>Verifier: Evaluate Intermediate Evidence
-        alt Evidence Incomplete
-            Planner->>Planner: Dynamic ReAct Reflection: Generate Drill-Down Step
-        end
+    subgraph Ingestion ["1. Document AST & Hierarchical Ingestion"]
+        Doc[PDF / SEC 10-K / TXT] --> Parser[Layout Parser & Table Linearizer]
+        Parser --> AST[Document AST Builder\nDocumentRoot > Section > Blocks]
+        AST --> Chunker[Hierarchical Small-to-Big Chunker]
+        Chunker --> Dense[(HNSW Dense Vector Store\nChromaDB)]
+        Chunker --> BM25[(Sparse Lexical Index\nBM25+ / Okapi)]
     end
-    Planner->>Verifier: Cross-Document Conflict & Chronology Check
-    Planner->>User: Synthesized Multi-Source Grounded Answer
+
+    subgraph Funnel ["2. Multi-Stage Retrieval Funnel"]
+        Query[User Question / SEC Query] --> Runtime[Stateful Agentic Runtime]
+        Runtime --> Decompose[Query AST Decomposition & Acronym Expansion]
+        Decompose --> Stage1[Stage 1: High Recall Retrieval\nDense + BM25 RRF (k=60)]
+        Stage1 --> Stage2[Stage 2: Precision Reranking\nCross-Encoder / ColBERT MaxSim]
+        Stage2 --> Stage3[Stage 3: Contextual Extractive Compression\nNoise Pruning & Lost-in-the-Middle Mitigation]
+        Stage3 --> Stage4[Stage 4: Small-to-Big Context Expansion\nParent Section AST Context Retrieval]
+    end
+
+    subgraph Grounding ["3. NLI Factual Grounding & Hallucination Gatekeeper"]
+        Stage4 --> Generator[Grounded LLM Generator]
+        Generator --> Claims[Stanford FActScore Atomic Claim Extractor]
+        Claims --> NLI[NLI Entailment Verifier\nEntailment / Contradiction / Neutral]
+        NLI --> Spans[Character-Span & Token Alignment\nExact Offsets in Source Chunks]
+        Spans --> Gatekeeper{Hallucination Gatekeeper}
+        Gatekeeper -->|Contradiction / Hallucination| Redact[Excise Sentence / Principled Abstention]
+        Gatekeeper -->|Verified Entailment| Output[Stream Verified Completion + Telemetry]
+    end
+
+    subgraph Graph ["4. Enterprise Knowledge Graph"]
+        AST -.-> KG[Entity Resolution Engine\nAlias Clustering & Canonicalization]
+        KG --> Cypher[OpenCypher Export\nNeo4j / Neptune Ready]
+        KG --> GraphTraverse[k-Hop Subgraph Traversal & Community Clusters]
+    end
 ```
 
-### ReAct Loop Mechanics
-1. **Thought**: Diagnoses requirements for the sub-task (e.g., *"Isolate Google Cloud 2023 revenue before comparing with AWS"*).
-2. **Action**: Dispatches an isolated sub-query with adapted retrieval policy.
-3. **Observation**: Records intermediate answers, confidence, and citation spans.
-4. **Reflection**: If evidence is partial or abstained, autonomously appends a drill-down recovery step.
-
 ---
 
-## 10. Parent-Child Small-to-Big Hierarchical Retrieval
+## 2. Ingestion Engine: Document Abstract Syntax Tree (AST)
 
-A fundamental trade-off exists in dense retrieval:
-- **Small chunks (100–200 tokens)** produce sharp, noise-free vector embeddings that match query vectors with high cosine fidelity.
-- **Large chunks (600–1200 tokens)** provide the LLM with sufficient context, table headers, and qualifying clauses to generate accurate, non-hallucinatory answers.
+Standard RAG architectures fragment multi-page documents into disconnected character slices, decoupling table cells from column headers and shredding section hierarchies.
 
-The **`HierarchicalRetriever`** bridges this gap:
-1. Large **Parent Chunks** are created along natural section and paragraph boundaries.
-2. Fine-grained **Child Chunks** are generated from each parent, linked via `parent_id`.
-3. Dense retrieval queries the Child Chunks in ChromaDB.
-4. Retrieved child chunks are expanded back to their Parent Chunks.
-5. Adjacent or overlapping parent windows are merged to deliver clean, unfragmented context to the generator.
-
----
-
-## 11. Maximal Marginal Relevance (MMR) Diversity Reranker
-
-Top-K retrieval from dense and BM25 systems frequently produces redundant near-duplicate passages from the same section or boilerplate headers.
-
-To maximize information gain across diverse document sections, the pipeline implements Carbonell & Goldstein's **Maximal Marginal Relevance (MMR)**:
-
-\[
-\text{MMR}(q, D) = \arg\max_{d_i \in D \setminus S} \left[ \lambda \cdot \text{Sim}(d_i, q) - (1 - \lambda) \cdot \max_{d_j \in S} \text{Sim}(d_i, d_j) \right]
-\]
-
-Where:
-- \( D \) is the set of candidate passages retrieved by hybrid search.
-- \( S \) is the subset of already selected diverse passages.
-- \( \lambda \in [0.0, 1.0] \) tunes the trade-off between query relevance (\( \lambda \to 1.0 \)) and passage diversity (\( \lambda \to 0.0 \)).
-
----
-
-## 12. Brutal Stress, Chaos & Concurrency Resilience
-
-The pipeline has been hardened through adversarial and chaotic stress testing:
-- **Thread-Safe Concurrent Execution**: Thread-safe `threading.RLock()` synchronization protects the in-memory semantic cache and index structures under 30+ parallel query threads.
-- **Logit Calibration**: Raw cross-encoder logits (\( -\infty, +\infty \)) are mapped into calibrated probabilities via numerical sigmoid transforms (\( \sigma(x) \)), preventing false abstentions on high-quality evidence.
-- **Adversarial Sanitization**: Strips zero-width characters (`\u200B`, `\uFEFF`), RTL overrides (`\u202E`), SQLi polyglots, and prompt jailbreak attempts.
-- **Defensive Math Safeguards**: Programmatic numerical reasoning prevents division-by-zero, handles negative percentage margins, and normalizes disparate financial units.
-
----
-
-## 13. Stanford ColBERT-Style Token-Level Late Interaction MaxSim Scoring
-
-Standard single-vector dense retrieval compresses an entire chunk into a single point in latent space, discarding fine-grained numeric qualifiers, multi-token entity identifiers, and negations. Cross-encoders solve this but incur severe $O(L^2)$ transformer self-attention latency.
-
-The **`LateInteractionScorer`** implements Khattab & Zaharia's (SIGIR 2020) ColBERT Late Interaction:
-Tokens are embedded as sequences of normalized vectors $E_q = [\mathbf{e}_{q,1}, \dots, \mathbf{e}_{q,|Q|}]$ and $E_d = [\mathbf{e}_{d,1}, \dots, \mathbf{e}_{d,|D|}]$. The relevance score is computed via the token-level **MaxSim operator**:
-
-\[
-\text{MaxSim}(Q, D) = \sum_{i=1}^{|Q|} w_i \max_{j=1}^{|D|} \left( \mathbf{e}_{q,i}^\top \mathbf{e}_{d,j} \right)
-\]
-
-Where:
-- Each query token finds its maximally aligned counterpart in the document passage.
-- Token weights $w_i$ down-weight generic grammatical stopwords while emphasizing rare domain entities.
-- Provides token-to-token alignment maps for complete interpretability and auditability.
-
----
-
-## 14. Rocchio & RM3 Pseudo-Relevance Feedback (PRF) Query Expansion
-
-To combat vocabulary mismatch and query under-specification, the pipeline integrates Rocchio relevance feedback (Rocchio 1971; RM3):
-
-```mermaid
-flowchart LR
-    Q0[Original Query Q0] --> InitRet[Initial Hybrid Retrieval]
-    InitRet --> TopK[Top-K Feedback Passages D_R]
-    TopK --> TermExt[RM3 Salience Extractor]
-    TopK --> Centroid[Compute Document Centroid]
-    TermExt --> ExpTerms[Salient Discriminative Terms]
-    Centroid --> RocchioBlend[Rocchio Vector Blending]
-    RocchioBlend --> Guardrail{Cosine Anti-Drift Guardrail}
-    Guardrail -->|cos >= tau| Expanded[Expanded Dense Vector]
-    Guardrail -->|cos < tau| Revert[Guarded Conservative Query]
+### Hierarchical Tree Representation
+Documents are parsed into a formal **Document AST** (`src/parsing/document_ast.py`):
+```
+DocumentRoot (file_id, total_pages)
+  └── SectionNode (H1: ITEM 7. MD&A)
+        ├── ParagraphNode (lead summary)
+        ├── TableNode (linearized matrix with row-column triples)
+        └── SectionNode (H2: Results of Operations)
+              └── ParagraphNode (child chunk with parent section pointer)
 ```
 
-### Mathematical Formulation
-The dense query vector is adjusted toward the feedback passage centroid:
-
-\[
-\mathbf{q}_{\text{exp}} = \alpha \mathbf{q}_0 + \frac{\beta}{|D_R|} \sum_{d \in D_R} \mathbf{d}
-\]
-
-Lexical expansion terms are selected using RM3 term relevance:
-
-\[
-\text{Score}(t) = \text{TF}(t, D_R) \times \left(1 + \log\left( 1 + 2 \cdot \frac{\text{DF}(t, D_R)}{|D_R|} \right)\right)
-\]
-
-**Anti-Drift Guardrail**: If $\cos(\mathbf{q}_0, \mathbf{q}_{\text{exp}}) < \tau_{\text{drift}}$ (e.g. 0.60), the expansion is automatically clamped to prevent adversarial query drift.
+### Small-to-Big (Parent-Child) Retrieval
+1. **Index-Time Granularity**: Fine-grained child chunks (128–256 tokens) are embedded and indexed in ChromaDB and BM25 for maximum semantic matching precision.
+2. **Provenance Metadata**: Every child chunk retains a `parent_id` and pre-rendered `parent_context` (the enclosing section and surrounding paragraphs).
+3. **Query-Time Expansion**: At generation time, the retriever returns the child chunk for rank ordering, but passes the enclosing parent section context to the LLM generation prompt, eliminating context truncation.
 
 ---
 
-## 15. Conversational Coreference Normalizer & Relative Temporal Grounder
+## 3. Multi-Stage Retrieval Funnel
 
-Real-world user queries in multi-turn sessions contain ambiguous anaphora (*"What was its margin?"*) and relative temporal markers (*"last year"*, *"two years ago"*).
+To achieve sub-second P99 latencies without sacrificing recall against dense financial filings, retrieval operates across four disciplined stages:
 
-The **`QueryRewriter`** performs:
-1. **Coreference Resolution**: Replaces pronouns (*it*, *its*, *their*, *the company*) with explicit antecedent named entities extracted from dialogue history.
-2. **Temporal Grounding**: Translates relative expressions (*"last year"*, *"previous year"*) into explicit calendar or fiscal years relative to an anchor year (e.g. 2024 $\to$ 2023).
-3. **Domain Acronym Disambiguation**: Enriches high-frequency financial and technical acronyms (EBITDA, CAGR, ARR, LLM, EPS) with canonical expansions.
+| Stage | Mechanism | Model / Algorithm | Output Cardinality |
+| :--- | :--- | :--- | :--- |
+| **Stage 1: High Recall** | Parallel Dual Search | HNSW Cosine Dense + BM25+ Sparse | Top-50 candidates |
+| **Fusion** | Score Calibration | Weighted Reciprocal Rank Fusion (RRF, $k=60$) | Top-20 candidates |
+| **Stage 2: Precision Rerank** | Cross-Attention Scoring | `cross-encoder/ms-marco-MiniLM-L-6-v2` or ColBERT MaxSim | Top-5 candidates |
+| **Stage 3: Compression** | Extractive Noise Pruning | Sentence-level lexical & semantic relevance scoring | High-density evidence |
+| **Stage 4: Expansion** | Small-to-Big Context | Document AST Parent Section Context Linking | Full prompt context |
+
+### ColBERT Late-Interaction MaxSim Formulation
+When configured with `rerank_backend="colbert_maxsim"`, the system computes token-to-token late interaction:
+$$\text{MaxSim}(Q, D) = \sum_{i \in Q} \max_{j \in D} \left( E_{q, i} \cdot E_{d, j}^\top \right)$$
+Preserving individual numerical tokens, dates, and metric names without 1D sentence embedding compression.
+
+### Contextual Extractive Compression
+Raw retrieved chunks contain irrelevant boilerplates that induce the *"Lost-in-the-Middle"* hallucination effect. The `ContextualCompressor` decomposes candidate chunks into discrete sentences, filters out low-salience noise, and preserves high-density evidence sentences in original document order.
 
 ---
 
-## 16. Multi-Modal Table & Matrix Linearization Engine
+## 4. Factual Grounding & Hallucination Gatekeeping
 
-Standard token chunkers shred structured multi-column tables, disconnecting cell values from column headers and rendering financial statements, balance sheets, and benchmark tables unanswerable.
+### The Limitation of String Matching
+Naive RAG systems evaluate citations using substring or word-frequency overlap. If a source passage states:
+> *"Legacy Data Services revenue decreased by 17.8% in fiscal 2024."*
 
-The **`TableParser`** detects and transforms Markdown, ASCII, and CSV tables into three synchronized representations:
-1. **Canonical Clean Markdown**: Preserves structural layout.
-2. **Linearized Semantic Triples (Row-Column Statements)**:
-   ```
-   [Row 1] Segment: Google Cloud | FY2022: $26.3B | FY2023: $33.1B | Growth: +25.9%
-   ```
-3. **Table Schema & Entry Summaries**: Natural language summaries describing column headers, row counts, and data types (currency, percentage, numeric).
+A hallucinated LLM generation stating:
+> *"Legacy Data Services revenue increased by 17.8% in fiscal 2024."*
 
-These linearized triples are embedded into the vector store and BM25 index alongside narrative text, enabling pinpoint retrieval of exact numerical cells.
+shares >80% word overlap with the source passage. String-matching validators mark this hallucination as "verified".
 
+### NLI Premise-Hypothesis Verification Engine
+The `NLIVerifier` (`src/claims/nli_verifier.py`) evaluates atomic claims using Natural Language Inference:
+- **ENTAILMENT**: Premise strictly proves the hypothesis claim.
+- **CONTRADICTION**: Premise refutes the hypothesis claim (detected via directional polarity antonyms, numerical attribute mismatch, or negation inversions).
+- **NEUTRAL**: Evidence is insufficient to corroborate the hypothesis claim.
 
+### Pre-Stream Hallucination Gatekeeper
+Operating as a pre-delivery circuit breaker (`src/grounding/gatekeeper.py`):
+1. **Pass Policy**: Emits response when zero contradictions exist and factual support ratio exceeds threshold ($\ge 0.70$).
+2. **Redact Policy**: Automatically excises contradicted or unsupported sentences from the completion, preserving grounded facts.
+3. **Abstain Policy**: If core claims fail grounding or contradictions are detected, replaces output with principled abstention (`SupportLevel.INSUFFICIENT_EVIDENCE` or `CONTRADICTORY_EVIDENCE`), returning detailed audit telemetry.
+
+---
+
+## 5. Enterprise Knowledge Graph & Entity Resolution
+
+### Automated Entity Resolution
+Mentions in financial documents exhibit high lexical variance (*"Alphabet Inc."*, *"Google"*, *"Alphabet"*, *"GOOGL"*). The `EntityResolver` (`src/experimental/graph_rag.py`):
+- Normalizes corporate suffixes (`Inc.`, `Corp.`, `LLC`, `plc`).
+- Maps alias dictionaries and computes token similarity.
+- Unifies disparate mentions into a single canonical `EntityNode`.
+
+### OpenCypher Export
+The graph engine exports directly to openCypher statements compatible with Neo4j, Amazon Neptune, and Memgraph:
+```cypher
+MERGE (n:ORGANIZATION {name: 'Alphabet', mentions: 3});
+MATCH (a {name: 'Alphabet'}), (b {name: 'Microsoft'}) MERGE (a)-[:COMPETES_WITH {weight: 2.0}]->(b);
+```
+
+---
+
+## 6. Stateful Agentic Reasoning Runtime
+
+The `StatefulAgentRuntime` (`src/agentic/runtime.py`) manages multi-hop queries:
+1. **Query AST Decomposition**: Analyzes comparative and multi-period queries (e.g., *"Compare Cloud revenue of A and B in FY2024"*), creating an acyclic dependency graph of sub-tasks.
+2. **Acronym & Semantic Expansion**: Expands financial acronyms (EBITDA, EPS, FCF, CAGR) into canonical forms before retrieval.
+3. **Speculative Parallel Retrieval**: Concurrently dispatches sub-queries to maximize throughput.
+4. **Dynamic Plan Correction**: If intermediate retrieval yields low-confidence candidates ($\text{score} < 0.25$), automatically triggers query relaxation and sub-task reformulation.
+5. **Bounded Budgets**: Enforces strict token ceilings and millisecond timeouts.

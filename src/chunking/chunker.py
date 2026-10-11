@@ -332,6 +332,9 @@ def get_chunker(strategy: str) -> Chunker:
     if strategy == "contextual":
         from src.chunking.contextual_chunker import ContextualChunker
         return ContextualChunker()
+    if strategy in {"hierarchical", "ast"}:
+        from src.chunking.hierarchical_chunker import HierarchicalChunker
+        return HierarchicalChunker()
     if strategy not in CHUNKERS:
-        raise ValueError(f"Unknown chunking strategy: {strategy}. Options: {list(CHUNKERS.keys()) + ['contextual']}")
+        raise ValueError(f"Unknown chunking strategy: {strategy}. Options: {list(CHUNKERS.keys()) + ['contextual', 'hierarchical']}")
     return CHUNKERS[strategy]()

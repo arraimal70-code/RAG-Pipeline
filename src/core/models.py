@@ -33,9 +33,11 @@ class QuestionType(str, Enum):
 
 class SupportLevel(str, Enum):
     SUPPORTED = "supported"
+    FULL_SUPPORT = "supported"
     PARTIALLY_SUPPORTED = "partially_supported"
     UNSUPPORTED = "unsupported"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    CONTRADICTORY_EVIDENCE = "contradictory_evidence"
 
 
 class FailureCategory(str, Enum):
@@ -150,6 +152,10 @@ class Citation(BaseModel):
     chunk_id: str
     relevant_text: str
     validated: bool = False
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    entailment_score: Optional[float] = None
+    nli_status: Optional[str] = None
 
 
 class GenerationOutput(BaseModel):

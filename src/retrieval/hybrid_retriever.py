@@ -156,6 +156,20 @@ class HybridRetriever:
                 rank=rank,
             ))
 
+        # Stage 5: Contextual Extractive Compression (prunes noise sentences)
+        compress_active = getattr(policy, "compress_enabled", None)
+        if compress_active is None:
+            compress_active = getattr(self.cfg, "compress_enabled", False)
+
+        if compress_active and results:
+            from src.retrieval.contextual_compressor import ContextualCompressor
+            compressor = ContextualCompressor()
+            results = compressor.compress_candidates(query, results)
+            method_details["compression"] = {
+                "enabled": True,
+                "candidates_compressed": len(results),
+            }
+
         elapsed = (time.time() - start_time) * 1000
 
         return RetrievalOutput(
@@ -283,13 +297,18 @@ class HybridRetriever:
     # ──────────────────────────────────────────
     def _rerank(self, query: str, candidates: list[dict]) -> list[dict]:
         """
-        Cross-encoder reranking.
-
-        Cross-encoders are more accurate than bi-encoders for
-        relevance scoring because they process query+document together.
-
-        Model: ms-marco-MiniLM (fast, good quality)
+        Rerank candidates using Cross-Encoder or ColBERT MaxSim Late-Interaction.
         """
+        if getattr(self.cfg, "rerank_backend", "cross_encoder") == "colbert_maxsim":
+            from src.experimental.late_interaction import LateInteractionScorer
+            scorer = LateInteractionScorer()
+            for candidate in candidates:
+                maxsim_res = scorer.score_passage(query, candidate["content"])
+                candidate["score"] = float(maxsim_res.normalized_score)
+                candidate["rerank_score"] = float(maxsim_res.raw_score)
+            candidates.sort(key=lambda x: x["score"], reverse=True)
+            return candidates
+
         if self._reranker is None:
             from sentence_transformers import CrossEncoder
             self._reranker = CrossEncoder(self.cfg.rerank_model)

@@ -53,6 +53,8 @@ class RetrievalConfig:
     rerank_enabled: bool = True
     rerank_top_k: int = 5
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_backend: Literal["cross_encoder", "colbert_maxsim"] = "cross_encoder"
+    compress_enabled: bool = False
     adaptive_enabled: bool = True
     adaptive_strategy: Literal["query_type", "confidence", "hybrid"] = "query_type"
 

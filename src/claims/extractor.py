@@ -23,7 +23,7 @@ This module:
 
 import re
 import logging
-from typing import Optional
+from typing import Optional, Any, List, Dict
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -141,27 +141,38 @@ class ClaimExtractor:
             return "comparative"
         return "factual"
 
+    def __init__(self, nli_verifier: Optional[Any] = None):
+        from src.claims.nli_verifier import NLIVerifier
+        self.nli_verifier = nli_verifier or NLIVerifier()
+
     def evaluate_claim(
         self,
         claim: AtomicClaim,
         chunks: list[TextChunk],
     ) -> AtomicClaim:
         """
-        Evaluate a single claim against retrieved evidence.
-
-        Uses lexical overlap + numerical verification to determine
-        whether the claim is supported by the evidence.
+        Evaluate a single claim against retrieved evidence using NLI premise-hypothesis entailment.
         """
         if not chunks:
             claim.support = ClaimSupport.UNSUPPORTED
+            claim.confidence = 0.0
+            claim.source_chunk_ids = []
             return claim
 
-        # For numerical claims, try programmatic verification
-        if claim.claim_type == "numerical":
-            return self._evaluate_numerical_claim(claim, chunks)
+        status, confidence, chunk_ids, explanation = self.nli_verifier.verify_claim_against_chunks(claim, chunks)
+        claim.support = status
+        claim.confidence = confidence
+        claim.source_chunk_ids = chunk_ids
 
-        # For other claims, use lexical overlap
-        return self._evaluate_lexical_claim(claim, chunks)
+        # If NLI reported unsupported, fallback to lexical overlap as safety net
+        if claim.support == ClaimSupport.UNSUPPORTED and claim.claim_type == "numerical":
+            return self._evaluate_numerical_claim(claim, chunks)
+        elif claim.support == ClaimSupport.UNSUPPORTED:
+            lex_claim = self._evaluate_lexical_claim(claim, chunks)
+            if lex_claim.support != ClaimSupport.UNSUPPORTED:
+                return lex_claim
+
+        return claim
 
     def _evaluate_lexical_claim(
         self, claim: AtomicClaim, chunks: list[TextChunk]
