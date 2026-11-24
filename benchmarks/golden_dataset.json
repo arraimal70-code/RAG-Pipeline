@@ -1,0 +1,92 @@
+[
+  {
+    "question": "What was Google Cloud's revenue in fiscal year 2024 and its year-over-year growth rate?",
+    "contexts": [
+      "Alphabet Inc. reports that Google Cloud segment revenue accelerated to $40.0 billion in fiscal year 2024, representing a 28% year-over-year increase from $31.2 billion in FY2023.",
+      "Google Services revenues rose to $310 billion, reflecting continuous search advertising resilience and YouTube subscription growth."
+    ],
+    "ground_truth": "Google Cloud revenue reached $40.0 billion in fiscal year 2024, growing 28% year-over-year.",
+    "answer": "Google Cloud reported $40.0 billion in revenue for fiscal year 2024, achieving a 28% year-over-year growth rate."
+  },
+  {
+    "question": "What is the primary benefit of ColBERT Late-Interaction MaxSim scoring over standard cross-encoders?",
+    "contexts": [
+      "Stanford ColBERT late interaction computes token-level MaxSim operations using fast vector dot products. This eliminates the quadratic O((|Q|+|D|)^2) attention computation of monolithic cross-encoders while preserving per-token alignment fidelity.",
+      "Dense bi-encoders compress passage information into a single vector, losing multi-token numbers and precise semantic qualifiers."
+    ],
+    "ground_truth": "ColBERT MaxSim avoids the quadratic computational complexity of cross-encoders while preserving token-level alignment fidelity.",
+    "answer": "ColBERT Late-Interaction MaxSim preserves fine-grained token alignments without the quadratic computational bottleneck of cross-encoders."
+  },
+  {
+    "question": "What was Apple's Services division quarterly revenue reported in Q3 2024?",
+    "contexts": [
+      "Apple reported quarterly revenue of $85.8 billion in Q3 FY2024. Services revenue reached an all-time record of $24.2 billion, up 14% year-over-year.",
+      "iPhone revenue was $39.3 billion compared to $39.7 billion in the year-ago quarter."
+    ],
+    "ground_truth": "Apple's Services division revenue was $24.2 billion in Q3 2024.",
+    "answer": "In Q3 2024, Apple's Services revenue reached an all-time quarterly record of $24.2 billion."
+  },
+  {
+    "question": "How does Anthropic Contextual Retrieval prevent orphaned retrieval chunks?",
+    "contexts": [
+      "Anthropic Contextual Retrieval prepends situated document-level context and section hierarchy to each chunk prior to embedding and BM25 indexing. This ensures standalone chunks carry explicit document scope and topical context.",
+      "Standard recursive chunking separates paragraphs from parent document headers, creating ambiguous retrieval results."
+    ],
+    "ground_truth": "Anthropic Contextual Retrieval prepends document-level and section hierarchy context to chunks before embedding, giving isolated passages clear topical context.",
+    "answer": "Contextual Retrieval prepends document synopsis and section hierarchy to chunks before embedding, preventing isolated chunks from losing topical context."
+  },
+  {
+    "question": "What was Microsoft Cloud's gross margin percentage in FY2024?",
+    "contexts": [
+      "Microsoft Cloud gross margin percentage expanded by 150 basis points to 72% in fiscal year 2024, driven by cloud scale efficiencies and server utilization gains.",
+      "Capital expenditures totaled $55.7 billion, supporting global datacenter expansion for AI training workloads."
+    ],
+    "ground_truth": "Microsoft Cloud gross margin percentage was 72% in FY2024.",
+    "answer": "Microsoft Cloud achieved a gross margin percentage of 72% in fiscal year 2024."
+  },
+  {
+    "question": "What action does the Hallucination Gatekeeper take when a generated assertion contradicts verified evidence?",
+    "contexts": [
+      "The Hallucination Gatekeeper enforces strict pre-stream factual verification. If an atomic claim is identified as a contradiction by the 3-class NLI verifier, the gatekeeper blocks the stream and triggers safe abstention.",
+      "Unverified neutral claims are filtered or redacted, whereas fully entailed claims pass directly to the client response stream."
+    ],
+    "ground_truth": "The Hallucination Gatekeeper blocks response streaming and triggers safe abstention when assertions contradict verified evidence.",
+    "answer": "When an assertion contradicts verified evidence, the Hallucination Gatekeeper halts the stream and executes safe abstention."
+  },
+  {
+    "question": "What are the three multi-vector representations extracted by BGE-M3?",
+    "contexts": [
+      "BAAI BGE-M3 produces three simultaneous representations: 1024-dimensional normalized dense vectors, sparse lexical term weights, and per-token ColBERT multi-vectors for late-interaction scoring.",
+      "Dense embeddings capture general semantic similarity while sparse weights emulate learned lexical indices like SPLADE."
+    ],
+    "ground_truth": "BGE-M3 extracts 1024-dimensional dense vectors, sparse lexical term weights, and ColBERT multi-vectors.",
+    "answer": "BGE-M3 outputs 1024-dimensional dense vectors, sparse lexical weights, and ColBERT multi-vectors."
+  },
+  {
+    "question": "What is the HNSW vector distance metric configured in the Qdrant store?",
+    "contexts": [
+      "The enterprise Qdrant collection is configured with VectorParams utilizing Cosine Distance for normalized dense vector search across document embeddings.",
+      "Payload indexing on tenant_id and user_role enables millisecond sub-partition filtering."
+    ],
+    "ground_truth": "The Qdrant vector store is configured with Cosine Distance.",
+    "answer": "The Qdrant vector store is configured with Cosine Distance for normalized vector retrieval."
+  },
+  {
+    "question": "What was Amazon AWS's annual operating income in 2023?",
+    "contexts": [
+      "Amazon Web Services (AWS) segment operating income grew to $24.6 billion in 2023, compared with $22.8 billion in 2022.",
+      "AWS net sales increased 13% year-over-year to $90.8 billion in fiscal 2023."
+    ],
+    "ground_truth": "AWS operating income was $24.6 billion in 2023.",
+    "answer": "In 2023, Amazon AWS reported an operating income of $24.6 billion."
+  },
+  {
+    "question": "What are the four stages of the Frontier RAG retrieval and reranking funnel?",
+    "contexts": [
+      "The Tier-1 Frontier RAG funnel executes across 4 sequential stages: Stage 1 Dense + BM25 Fusion (Top 50), Stage 2 ColBERT MaxSim Fast Pruning (Top 20), Stage 3 Cross-Encoder Deep Attention (Top 5), and Stage 4 Contextual Extractive Compression.",
+      "This multi-stage architecture achieves sub-200ms latency while maximizing precision against adversarial corpora."
+    ],
+    "ground_truth": "The 4 stages are Dense+BM25 Fusion, ColBERT MaxSim Pruning, Cross-Encoder Deep Scoring, and Contextual Extractive Compression.",
+    "answer": "The four stages are: 1) Dense and BM25 Fusion, 2) ColBERT MaxSim Fast Pruning, 3) Cross-Encoder Reranking, and 4) Contextual Extractive Compression."
+  }
+]
