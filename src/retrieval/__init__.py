@@ -4,6 +4,12 @@ src/retrieval/__init__.py — Advanced Retrieval Engines.
 
 from src.retrieval.hybrid_retriever import HybridRetriever
 from src.retrieval.late_interaction import LateInteractionScorer, MaxSimScore, TokenAlignment
+from src.retrieval.reranker import (
+    BGEReranker,
+    ColBERTMaxSimReranker,
+    DeterministicReranker,
+    MultiStageRerankerFunnel,
+)
 from src.retrieval.prf import PseudoRelevanceFeedbackEngine, PRFExpansionResult
 from src.retrieval.hierarchical import HierarchicalRetriever, HierarchicalChunker
 from src.retrieval.mmr import MaximalMarginalRelevanceReranker
@@ -15,6 +21,10 @@ __all__ = [
     "LateInteractionScorer",
     "MaxSimScore",
     "TokenAlignment",
+    "BGEReranker",
+    "ColBERTMaxSimReranker",
+    "DeterministicReranker",
+    "MultiStageRerankerFunnel",
     "PseudoRelevanceFeedbackEngine",
     "PRFExpansionResult",
     "HierarchicalRetriever",

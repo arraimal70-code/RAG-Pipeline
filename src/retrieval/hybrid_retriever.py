@@ -19,17 +19,18 @@ strategies.
 
 import logging
 import time
-from typing import Optional
 from collections import defaultdict
 
+from src.adaptive.policy import RetrievalPolicy
 from src.core.config import config
 from src.core.models import (
-    RetrievalResult, RetrievalOutput, TextChunk, QueryType,
+    RetrievalOutput,
+    RetrievalResult,
+    TextChunk,
 )
-from src.indexing.vector_store import VectorIndex
-from src.indexing.bm25_index import BM25Index
 from src.embeddings.embedder import get_embedder
-from src.adaptive.policy import RetrievalPolicy
+from src.indexing.bm25_index import BM25Index
+from src.indexing.vector_store import VectorIndex
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +60,8 @@ class HybridRetriever:
     def retrieve(
         self,
         query: str,
-        policy: Optional[RetrievalPolicy] = None,
-        query_embedding: Optional[list[float]] = None,
+        policy: RetrievalPolicy | None = None,
+        query_embedding: list[float] | None = None,
     ) -> RetrievalOutput:
         """
         Full retrieval pipeline with optional adaptive policy.
@@ -186,8 +187,8 @@ class HybridRetriever:
     def _dense_retrieve(
         self,
         query: str,
-        top_k: Optional[int] = None,
-        query_embedding: Optional[list[float]] = None,
+        top_k: int | None = None,
+        query_embedding: list[float] | None = None,
     ) -> list[dict]:
         """Semantic similarity search via vector index."""
         if top_k is None:
@@ -199,7 +200,7 @@ class HybridRetriever:
     # ──────────────────────────────────────────
     # Stage 2: BM25 retrieval
     # ──────────────────────────────────────────
-    def _bm25_retrieve(self, query: str, top_k: Optional[int] = None) -> list[dict]:
+    def _bm25_retrieve(self, query: str, top_k: int | None = None) -> list[dict]:
         """Lexical keyword search via BM25."""
         if top_k is None:
             top_k = self.cfg.bm25_top_k
@@ -229,8 +230,8 @@ class HybridRetriever:
         self,
         dense: list[dict],
         bm25: list[dict],
-        dense_weight: Optional[float] = None,
-        bm25_weight: Optional[float] = None,
+        dense_weight: float | None = None,
+        bm25_weight: float | None = None,
     ) -> list[dict]:
         """
         Weighted score fusion.
@@ -293,34 +294,32 @@ class HybridRetriever:
         return results
 
     # ──────────────────────────────────────────
-    # Stage 4: Reranking
+    # Stage 4: Multi-Stage Reranking & Funnel
     # ──────────────────────────────────────────
     def _rerank(self, query: str, candidates: list[dict]) -> list[dict]:
         """
-        Rerank candidates using Cross-Encoder or ColBERT MaxSim Late-Interaction.
+        Rerank candidates using Tier-1 Multi-Stage Funnel, ColBERT MaxSim, or BGE-Reranker.
         """
-        if getattr(self.cfg, "rerank_backend", "cross_encoder") == "colbert_maxsim":
-            from src.experimental.late_interaction import LateInteractionScorer
-            scorer = LateInteractionScorer()
-            for candidate in candidates:
-                maxsim_res = scorer.score_passage(query, candidate["content"])
-                candidate["score"] = float(maxsim_res.normalized_score)
-                candidate["rerank_score"] = float(maxsim_res.raw_score)
-            candidates.sort(key=lambda x: x["score"], reverse=True)
-            return candidates
+        from src.retrieval.reranker import (
+            BGEReranker,
+            ColBERTMaxSimReranker,
+            MultiStageRerankerFunnel,
+        )
 
-        if self._reranker is None:
-            from sentence_transformers import CrossEncoder
-            self._reranker = CrossEncoder(self.cfg.rerank_model)
+        backend = getattr(self.cfg, "rerank_backend", "cross_encoder")
 
-        # Build query-document pairs
-        pairs = [(query, c["content"]) for c in candidates]
-        rerank_scores = self._reranker.predict(pairs)
+        if backend == "multistage":
+            funnel = MultiStageRerankerFunnel(
+                colbert_prune_top_k=getattr(self.cfg, "post_fusion_top_k", 20),
+                final_top_k=getattr(self.cfg, "rerank_top_k", 5),
+                enable_compression=getattr(self.cfg, "compress_enabled", False),
+            )
+            return funnel.execute_funnel(query, candidates)
 
-        # Update scores and sort
-        for i, candidate in enumerate(candidates):
-            candidate["score"] = float(rerank_scores[i])
-            candidate["rerank_score"] = float(rerank_scores[i])
+        if backend == "colbert_maxsim":
+            reranker = ColBERTMaxSimReranker()
+            return reranker.rerank(query, candidates, top_k=self.cfg.rerank_top_k)
 
-        candidates.sort(key=lambda x: x["score"], reverse=True)
-        return candidates
+        # Default: High-precision BGE-Reranker-v2-M3 (with cross-encoder & deterministic fallback)
+        reranker_bge = BGEReranker(model_name=self.cfg.rerank_model)
+        return reranker_bge.rerank(query, candidates, top_k=self.cfg.rerank_top_k)
