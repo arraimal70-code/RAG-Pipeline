@@ -227,7 +227,7 @@ async def query_endpoint(
         return response
         
     except Exception as e:
-        logger.exception(f"Query failed: {e}")
+        logger.exception("Query failed")
         raise QueryProcessingError(str(e))
 
 
@@ -300,7 +300,7 @@ async def stream_query_endpoint(
 
 @app.post("/documents", response_model=DocumentInfo)
 async def upload_document(
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     user_id: str = Depends(check_rate_limit),
 ):
     """
@@ -318,7 +318,7 @@ async def upload_document(
     try:
         # Save file
         content = await file.read()
-        with open(temp_path, "wb") as f:
+        with open(temp_path, "wb") as f:  # noqa: ASYNC230
             f.write(content)
         
         # Validate document
@@ -346,7 +346,7 @@ async def upload_document(
         )
         
     except Exception as e:
-        logger.exception(f"Document upload failed: {e}")
+        logger.exception("Document upload failed")
         raise DocumentIngestionError(str(e))
     
     finally:

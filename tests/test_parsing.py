@@ -8,17 +8,13 @@ Verification Gate for Phase 1:
 4. TableFormer DataFrame ingestion extracts precise Entity-Attribute-Value semantic triples.
 """
 
-import os
-import pytest
 import pandas as pd
-from pathlib import Path
+import pytest
 
-from src.core.config import config, SecurityConfig, DoclingConfig
-from src.core.models import DocumentMetadata, TextChunk
-from src.parsing.docling_parser import DoclingParser
-from src.parsing.table_parser import TableParser, ParsedTable
-from src.parsing.document_ast import DocumentAST, DocumentASTBuilder, ASTNodeType
 from src.chunking.hierarchical_chunker import HierarchicalChunker
+from src.core.config import config
+from src.parsing.docling_parser import DoclingParser
+from src.parsing.table_parser import TableParser
 
 
 def test_docling_parser_initialization():
@@ -45,7 +41,7 @@ def test_multi_column_table_parsing_no_cell_corruption(tmp_path):
     test_file.write_text(table_content, encoding="utf-8")
 
     parser = DoclingParser(use_docling=False)
-    metadata, chunks, ast = parser.parse(test_file)
+    metadata, chunks, _ast = parser.parse(test_file)
 
     assert metadata.filename == "financial_table.md"
     assert len(chunks) >= 1
@@ -132,7 +128,7 @@ def test_security_prompt_injection_sanitization(tmp_path):
     test_file.write_text(malicious_text, encoding="utf-8")
 
     parser = DoclingParser(use_docling=False)
-    metadata, chunks, ast = parser.parse(test_file)
+    _metadata, chunks, _ast = parser.parse(test_file)
 
     combined_text = " ".join(c.content for c in chunks)
     assert "Ignore previous instructions" not in combined_text
@@ -156,7 +152,7 @@ Cloud revenue rose by 24.5% to $18.45B in fiscal 2024.
     test_file.write_text(doc_text, encoding="utf-8")
 
     parser = DoclingParser(use_docling=False)
-    metadata, chunks, ast = parser.parse(test_file)
+    _metadata, chunks, _ast = parser.parse(test_file)
 
     # Locate child paragraph chunk
     child_chunk = next(c for c in chunks if "24.5%" in c.content)
