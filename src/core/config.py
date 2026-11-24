@@ -33,11 +33,14 @@ class ChunkingConfig:
 @dataclass
 class EmbeddingConfig:
     """Configuration for embedding generation."""
-    provider: Literal["local", "openai", "deterministic"] = "local"
+    provider: Literal["local", "openai", "deterministic", "bge_m3"] = "local"
     model_name: str = "all-MiniLM-L6-v2"
     dimension: int = 384
     batch_size: int = 64
     normalize: bool = True
+    use_sparse: bool = True
+    use_colbert: bool = True
+    contextual_enrichment: bool = True
 
 
 @dataclass

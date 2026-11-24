@@ -12,12 +12,12 @@ Situated prefix format:
 {chunk_content}
 """
 
-import re
 import logging
-from typing import Optional, List
-from src.core.models import TextChunk
-from src.core.config import config, ChunkingConfig
+import re
+
 from src.chunking.chunker import RecursiveChunker
+from src.core.config import ChunkingConfig
+from src.core.models import TextChunk
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class ContextualChunker:
     def __init__(self, base_chunker=None):
         self.base_chunker = base_chunker or RecursiveChunker()
 
-    def _extract_document_synopsis(self, pages: List[TextChunk]) -> str:
+    def _extract_document_synopsis(self, pages: list[TextChunk]) -> str:
         """
         Extract a concise document synopsis from the lead paragraphs.
         In offline mode, extracts the first key sentences with title terms.
@@ -75,7 +75,60 @@ class ContextualChunker:
                 return line_str
         return "General"
 
-    def chunk(self, pages: List[TextChunk], cfg: ChunkingConfig) -> List[TextChunk]:
+    def enrich_chunks(
+        self,
+        chunks: list[TextChunk],
+        doc_synopsis: str | None = None,
+    ) -> list[TextChunk]:
+        """
+        Enrich an existing list of chunks (e.g. from DocumentAST or hierarchical chunking)
+        with situated document and section context prefixes.
+        """
+        if not chunks:
+            return []
+
+        filename = chunks[0].filename if chunks else "document"
+        if not doc_synopsis:
+            # Derive synopsis from the first chunk's content
+            first_text = chunks[0].content.strip()
+            lines = [line.strip() for line in first_text.split("\n") if line.strip() and not line.isupper()]
+            doc_synopsis = lines[0][:160] if lines else f"Content of {filename}"
+
+        enriched: list[TextChunk] = []
+        for c in chunks:
+            # Avoid double prefixing
+            if c.content.startswith("[Document:"):
+                enriched.append(c)
+                continue
+
+            section_name = c.section or c.metadata.get("heading_path") or "General"
+            prefix = f"[Document: {filename} | Section: {section_name} | Scope: {doc_synopsis}]"
+            contextualized_content = f"{prefix}\n{c.content}"
+
+            new_metadata = dict(c.metadata)
+            new_metadata.update({
+                "chunk_strategy": "contextual",
+                "context_prefix": prefix,
+                "raw_content": c.content,
+                "doc_synopsis": doc_synopsis,
+            })
+
+            enriched.append(
+                TextChunk(
+                    chunk_id=c.chunk_id,
+                    document_id=c.document_id,
+                    filename=c.filename,
+                    page_number=c.page_number,
+                    section=section_name,
+                    content=contextualized_content,
+                    char_offset=c.char_offset,
+                    token_count=len(contextualized_content) // 4,
+                    metadata=new_metadata,
+                )
+            )
+        return enriched
+
+    def chunk(self, pages: list[TextChunk], cfg: ChunkingConfig) -> list[TextChunk]:
         """
         Create situated chunks using Anthropic Contextual Retrieval methodology.
         """

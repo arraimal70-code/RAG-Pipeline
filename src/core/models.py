@@ -98,6 +98,8 @@ class TextChunk(BaseModel):
 
 class EmbeddedChunk(TextChunk):
     embedding: list[float] = Field(default_factory=list)
+    sparse_weights: dict[str, float] = Field(default_factory=dict)
+    colbert_vecs: list[list[float]] = Field(default_factory=list)
 
 
 # ── Retrieval models ───────────────────────────────
