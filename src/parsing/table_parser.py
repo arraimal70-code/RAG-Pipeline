@@ -14,10 +14,10 @@ This module detects, parses, and linearizes tables into:
    Allows dense bi-encoders and BM25 to locate cells with exact header context.
 """
 
-import re
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+import re
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,20 +25,20 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ParsedTable:
     """Structured representation of a parsed table."""
-    headers: List[str]
-    rows: List[List[str]]
+    headers: list[str]
+    rows: list[list[str]]
     num_rows: int
     num_cols: int
-    caption: Optional[str] = None
-    column_types: Dict[str, str] = field(default_factory=dict)
+    caption: str | None = None
+    column_types: dict[str, str] = field(default_factory=dict)
     raw_markdown: str = ""
 
-    def to_linearized_triples(self) -> List[str]:
+    def to_linearized_triples(self) -> list[str]:
         """
         Convert table rows into explicit Attribute-Value linearized semantic statements.
         Each statement anchors cell values with their explicit column header.
         """
-        triples: List[str] = []
+        triples: list[str] = []
         for idx, row in enumerate(self.rows, start=1):
             cell_pairs = []
             for col_idx, header in enumerate(self.headers):
@@ -73,7 +73,7 @@ class TableParser:
         return cell.strip().replace("\n", " ")
 
     @staticmethod
-    def _infer_type(values: List[str]) -> str:
+    def _infer_type(values: list[str]) -> str:
         """Infer column type (numeric, currency, percentage, date, text)."""
         valid_vals = [v for v in values if v.strip() and v.strip() not in {"-", "N/A", "null"}]
         if not valid_vals:
@@ -101,12 +101,12 @@ class TableParser:
             return "numeric"
         return "text"
 
-    def parse_markdown_tables(self, text: str) -> List[ParsedTable]:
+    def parse_markdown_tables(self, text: str) -> list[ParsedTable]:
         """
         Scan text for Markdown tables and parse them into structured ParsedTable objects.
         """
         lines = text.splitlines()
-        tables: List[ParsedTable] = []
+        tables: list[ParsedTable] = []
         i = 0
         n = len(lines)
 
@@ -131,7 +131,7 @@ class TableParser:
                     headers = [self._clean_cell(c) for c in header_line.split("|")]
 
                 # Read subsequent rows
-                rows: List[List[str]] = []
+                rows: list[list[str]] = []
                 j = i + 2
                 while j < n and "|" in lines[j] and lines[j].strip():
                     row_line = lines[j]
@@ -159,7 +159,7 @@ class TableParser:
                     caption = lines[i - 1].strip()
 
                 # Infer column types
-                col_types: Dict[str, str] = {}
+                col_types: dict[str, str] = {}
                 for col_idx, header in enumerate(headers):
                     col_vals = [r[col_idx] for r in rows if col_idx < len(r)]
                     col_types[header] = self._infer_type(col_vals)
@@ -203,3 +203,31 @@ class TableParser:
             linearized_blocks.append("\n".join(block_lines))
 
         return text + "\n\n" + "\n\n".join(linearized_blocks)
+
+    @classmethod
+    def from_dataframe(cls, df: Any, caption: str | None = None) -> ParsedTable:
+        """
+        Construct a ParsedTable directly from a pandas DataFrame (e.g. from Docling/TableFormer).
+        """
+        headers = [str(col).strip() for col in df.columns]
+        rows = [[str(val).strip() for val in row] for row in df.values]
+        col_types = {}
+        for col_idx, header in enumerate(headers):
+            col_vals = [r[col_idx] for r in rows if col_idx < len(r)]
+            col_types[header] = cls._infer_type(col_vals)
+
+        # Build clean raw markdown
+        header_row = "| " + " | ".join(headers) + " |"
+        sep_row = "| " + " | ".join(["---"] * len(headers)) + " |"
+        data_rows = ["| " + " | ".join(row) + " |" for row in rows]
+        raw_md = "\n".join([header_row, sep_row] + data_rows)
+
+        return ParsedTable(
+            headers=headers,
+            rows=rows,
+            num_rows=len(rows),
+            num_cols=len(headers),
+            caption=caption,
+            column_types=col_types,
+            raw_markdown=raw_md,
+        )

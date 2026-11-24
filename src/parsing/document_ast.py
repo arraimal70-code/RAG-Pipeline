@@ -14,12 +14,13 @@ This module implements a formal Document AST:
 3. Automatically computes breadcrumb ancestry (e.g. "Item 7 > Liquidity > Capital Resources").
 """
 
+import logging
 import re
 import uuid
-import logging
-from enum import Enum
-from typing import List, Dict, Any, Optional, Tuple, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 from src.core.models import TextChunk
 
@@ -41,15 +42,15 @@ class ASTNode:
     """A single node within the hierarchical Document Abstract Syntax Tree."""
     node_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
     node_type: ASTNodeType = ASTNodeType.PARAGRAPH
-    title: Optional[str] = None
+    title: str | None = None
     level: int = 0  # 0 for root, 1 for H1, 2 for H2, etc.
     content: str = ""
     page_number: int = 1
     char_start: int = 0
     char_end: int = 0
-    parent_id: Optional[str] = None
-    children: List["ASTNode"] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    parent_id: str | None = None
+    children: list["ASTNode"] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_child(self, child: "ASTNode") -> "ASTNode":
         child.parent_id = self.node_id
@@ -59,7 +60,7 @@ class ASTNode:
     def get_token_count(self) -> int:
         return max(1, len(self.content.split()))
 
-    def to_situated_text(self, breadcrumbs: Optional[List[str]] = None) -> str:
+    def to_situated_text(self, breadcrumbs: list[str] | None = None) -> str:
         """Format node text with situated hierarchical breadcrumbs."""
         crumbs = breadcrumbs or self.metadata.get("breadcrumbs", [])
         crumb_prefix = f"[{' > '.join(crumbs)}] " if crumbs else ""
@@ -77,7 +78,7 @@ class DocumentAST:
     Hierarchical Document Tree representing the full structural layout of an ingested file.
     """
 
-    def __init__(self, filename: str, document_id: Optional[str] = None):
+    def __init__(self, filename: str, document_id: str | None = None):
         self.document_id = document_id or str(uuid.uuid4())
         self.filename = filename
         self.root = ASTNode(
@@ -89,15 +90,15 @@ class DocumentAST:
             page_number=1,
             metadata={"filename": filename, "doc_id": self.document_id}
         )
-        self._node_index: Dict[str, ASTNode] = {self.root.node_id: self.root}
+        self._node_index: dict[str, ASTNode] = {self.root.node_id: self.root}
 
     def index_node(self, node: ASTNode) -> None:
         self._node_index[node.node_id] = node
 
-    def get_node(self, node_id: str) -> Optional[ASTNode]:
+    def get_node(self, node_id: str) -> ASTNode | None:
         return self._node_index.get(node_id)
 
-    def get_breadcrumbs(self, node_id: str) -> List[str]:
+    def get_breadcrumbs(self, node_id: str) -> list[str]:
         """Compute top-down breadcrumb trail from root to the specified node."""
         crumbs = []
         curr = self.get_node(node_id)
@@ -133,7 +134,7 @@ class DocumentAST:
             return " ".join(words[:max_tokens]) + " [...]"
         return full_text
 
-    def to_flattened_chunks(self, small_to_big: bool = True) -> List[TextChunk]:
+    def to_flattened_chunks(self, small_to_big: bool = True) -> list[TextChunk]:
         """
         Convert the AST leaves into TextChunks enriched with parent lineage and breadcrumbs.
         """
@@ -192,7 +193,7 @@ class DocumentASTBuilder:
         root = ast.root
 
         # Track active heading stack: list of (level, ASTNode)
-        stack: List[Tuple[int, ASTNode]] = [(0, root)]
+        stack: list[tuple[int, ASTNode]] = [(0, root)]
 
         # Split into blocks by double newlines or table boundaries
         blocks = self._split_into_blocks(text)
@@ -282,11 +283,11 @@ class DocumentASTBuilder:
 
         return ast
 
-    def _split_into_blocks(self, text: str) -> List[str]:
+    def _split_into_blocks(self, text: str) -> list[str]:
         """Split text while preserving table integrity."""
         lines = text.split("\n")
         blocks = []
-        current_block: List[str] = []
+        current_block: list[str] = []
         in_table = False
 
         for line in lines:

@@ -62,6 +62,12 @@ class HierarchicalChunker:
         logger.info(f"HierarchicalChunker produced {len(all_chunks)} chunks for {filename}")
         return all_chunks
 
+    def chunk_ast(self, ast: DocumentAST) -> List[TextChunk]:
+        """
+        Convert a pre-built DocumentAST (e.g., from IBM Docling) into Small-to-Big TextChunks.
+        """
+        return ast.to_flattened_chunks(small_to_big=self.small_to_big)
+
     @staticmethod
     def get_generation_context(chunk: TextChunk) -> str:
         """

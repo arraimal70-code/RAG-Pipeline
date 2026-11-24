@@ -8,15 +8,13 @@ malformed files.
 
 import hashlib
 import logging
-import re
 from pathlib import Path
-from typing import Optional
 
-from pypdf import PdfReader, PageObject
+from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from src.core.models import DocumentMetadata, TextChunk
 from src.core.config import config
+from src.core.models import DocumentMetadata, TextChunk
 
 logger = logging.getLogger(__name__)
 

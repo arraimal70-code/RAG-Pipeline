@@ -79,12 +79,24 @@ class EvidenceConfig:
 
 
 @dataclass
+class DoclingConfig:
+    """Configuration for IBM Docling layout parsing."""
+    enabled: bool = True
+    ocr_enabled: bool = field(default_factory=lambda: os.getenv("DOCLING_OCR_ENABLED", "false").lower() == "true")
+    table_former_enabled: bool = True
+    preserve_reading_order: bool = True
+    export_ast_json: bool = True
+
+
+@dataclass
 class SecurityConfig:
     """Configuration for security settings."""
     max_file_size_mb: int = 50
     max_pages_per_document: int = 500
     max_chunk_length: int = 10000
-    allowed_extensions: list[str] = field(default_factory=lambda: [".pdf", ".txt", ".md"])
+    allowed_extensions: list[str] = field(default_factory=lambda: [
+        ".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".txt", ".md"
+    ])
     sanitize_retrieved_text: bool = True
     injection_patterns: list[str] = field(default_factory=lambda: [
         "ignore previous instructions",
@@ -124,6 +136,7 @@ class AppConfig:
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
     evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
+    docling: DoclingConfig = field(default_factory=DoclingConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
