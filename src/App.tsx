@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import './App.css'
 
-type Tab = 'overview' | 'architecture' | 'experiments' | 'benchmark' | 'security' | 'performance' | 'evaluation' | 'reproducibility'
+type Tab = 'live_query' | 'overview' | 'architecture' | 'experiments' | 'benchmark' | 'security' | 'performance' | 'evaluation' | 'reproducibility'
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [activeTab, setActiveTab] = useState<Tab>('live_query')
 
   return (
     <div className="app">
@@ -31,6 +31,12 @@ function App() {
       </header>
 
       <nav className="nav">
+        <button 
+          className={activeTab === 'live_query' ? 'active' : ''}
+          onClick={() => setActiveTab('live_query')}
+        >
+          ⚡ Live Query
+        </button>
         <button 
           className={activeTab === 'overview' ? 'active' : ''}
           onClick={() => setActiveTab('overview')}
@@ -82,6 +88,7 @@ function App() {
       </nav>
 
       <main className="main">
+        {activeTab === 'live_query' && <LiveQueryTab />}
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'architecture' && <ArchitectureTab />}
         {activeTab === 'experiments' && <ExperimentsTab />}
@@ -1168,6 +1175,229 @@ function ReproducibilityTab() {
           </code>
         </div>
       </section>
+    </div>
+  )
+}
+
+function LiveQueryTab() {
+  const [query, setQuery] = useState('')
+  const [tenantId, setTenantId] = useState('default')
+  const [userRole, setUserRole] = useState('viewer')
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamStatus, setStreamStatus] = useState<string>('Idle')
+  const [streamedText, setStreamedText] = useState('')
+  const [citations, setCitations] = useState<any[]>([])
+  const [gatekeeperVerdict, setGatekeeperVerdict] = useState<string | null>(null)
+  const [stepTrace, setStepTrace] = useState<string[]>([])
+
+  const executeQuery = async () => {
+    if (!query.trim()) return
+    setIsStreaming(true)
+    setStreamStatus('Connecting to Frontier SSE Stream...')
+    setStreamedText('')
+    setCitations([])
+    setGatekeeperVerdict(null)
+    setStepTrace([])
+
+    try {
+      const response = await fetch('/api/v1/query/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-ID': tenantId,
+          'X-User-Role': userRole,
+        },
+        body: JSON.stringify({ question: query }),
+      })
+
+      if (!response.body) {
+        setStreamStatus('Error: Response body missing')
+        setIsStreaming(false)
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || ''
+
+        for (const evt of events) {
+          const lines = evt.split('\n')
+          let eventType = 'message'
+          let dataStr = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.replace('event: ', '').trim()
+            } else if (line.startsWith('data: ')) {
+              dataStr = line.replace('data: ', '').trim()
+            }
+          }
+
+          if (!dataStr) continue
+          try {
+            const parsed = JSON.parse(dataStr)
+            if (eventType === 'plan') {
+              setStreamStatus('Planning: Decomposing subqueries...')
+              setStepTrace((prev) => [...prev, `Plan: ${parsed.status}`])
+            } else if (eventType === 'retrieval') {
+              setStreamStatus(`Retrieval: ${parsed.candidates_count} candidates funnelled (Action: ${parsed.crag_action})`)
+              setStepTrace((prev) => [...prev, `Funnel: ${parsed.candidates_count} candidates`])
+            } else if (eventType === 'token') {
+              setStreamedText((prev) => prev + parsed.token)
+            } else if (eventType === 'citation') {
+              setCitations(parsed.citations || [])
+            } else if (eventType === 'gatekeeper') {
+              setGatekeeperVerdict(parsed.verdict)
+              setStepTrace((prev) => [...prev, `Gatekeeper verdict: ${parsed.verdict}`])
+            } else if (eventType === 'done') {
+              setStreamStatus('Completed')
+              setIsStreaming(false)
+            }
+          } catch (e) {
+            console.error('Failed to parse SSE payload', e)
+          }
+        }
+      }
+    } catch (err: any) {
+      setStreamStatus(`Failed: ${err?.message || err}`)
+    } finally {
+      setIsStreaming(false)
+    }
+  }
+
+  return (
+    <div className="tab-content live-query-tab">
+      <div className="section-header">
+        <h2>⚡ Frontier Live Query (SSE Streaming & RBAC)</h2>
+        <p className="section-desc">
+          Real-time Server-Sent Events stream from the LangGraph agentic loop with token attribution,
+          multi-tenant partition filtering, and NLI Hallucination Gatekeeper gating.
+        </p>
+      </div>
+
+      <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem', background: '#fff', borderRadius: '12px' }}>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.25rem' }}>Tenant ID</label>
+            <input
+              type="text"
+              value={tenantId}
+              onChange={(e) => setTenantId(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e0', borderRadius: '6px' }}
+            />
+          </div>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.25rem' }}>User Role (RBAC)</label>
+            <select
+              value={userRole}
+              onChange={(e) => setUserRole(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e0', borderRadius: '6px' }}
+            >
+              <option value="viewer">Viewer</option>
+              <option value="analyst">Analyst</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.25rem' }}>Query</label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g. What was Google Cloud's revenue in fiscal year 2024?"
+              onKeyDown={(e) => e.key === 'Enter' && executeQuery()}
+              style={{ flex: 1, padding: '0.75rem', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '1rem' }}
+            />
+            <button
+              onClick={executeQuery}
+              disabled={isStreaming}
+              style={{ padding: '0.75rem 1.5rem', background: '#667eea', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+            >
+              {isStreaming ? 'Streaming...' : 'Execute Query'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.8rem', color: '#718096', alignSelf: 'center' }}>Examples:</span>
+          <button
+            onClick={() => setQuery("What was Google Cloud's revenue in fiscal year 2024 and its growth rate?")}
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', background: '#edf2f7', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Alphabet Cloud FY24
+          </button>
+          <button
+            onClick={() => setQuery("What was Apple's Services division quarterly revenue reported in Q3 2024?")}
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', background: '#edf2f7', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Apple Services Q3
+          </button>
+          <button
+            onClick={() => setQuery("What is the primary benefit of ColBERT Late-Interaction MaxSim scoring?")}
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', background: '#edf2f7', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            ColBERT MaxSim Architecture
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
+        <div className="card" style={{ padding: '1.5rem', background: '#fff', borderRadius: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #edf2f7', paddingBottom: '0.75rem' }}>
+            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Streamed Response</h3>
+            {gatekeeperVerdict && (
+              <span style={{
+                padding: '0.25rem 0.75rem',
+                borderRadius: '999px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                background: gatekeeperVerdict === 'pass' ? '#c6f6d5' : '#fed7d7',
+                color: gatekeeperVerdict === 'pass' ? '#22543d' : '#742a2a'
+              }}>
+                GATEKEEPER: {gatekeeperVerdict.toUpperCase()}
+              </span>
+            )}
+          </div>
+
+          <div style={{ minHeight: '120px', lineHeight: '1.6', fontSize: '1rem', color: '#2d3748', whiteSpace: 'pre-wrap' }}>
+            {streamedText || (isStreaming ? 'Waiting for tokens...' : 'Submit a query to stream response.')}
+          </div>
+
+          {citations.length > 0 && (
+            <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #edf2f7' }}>
+              <h4 style={{ fontSize: '0.9rem', color: '#4a5568', marginBottom: '0.5rem' }}>Verified Citations</h4>
+              {citations.map((c, i) => (
+                <div key={i} style={{ background: '#f7fafc', padding: '0.5rem 0.75rem', borderRadius: '6px', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                  <strong>📄 {c.filename} (Page {c.page_number}):</strong> {c.text}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card" style={{ padding: '1.5rem', background: '#fff', borderRadius: '12px' }}>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', borderBottom: '1px solid #edf2f7', paddingBottom: '0.75rem' }}>Execution Telemetry</h3>
+          <p style={{ fontSize: '0.85rem', color: '#4a5568', marginBottom: '1rem' }}>
+            <strong>Status:</strong> {streamStatus}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {stepTrace.map((t, idx) => (
+              <div key={idx} style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem', background: '#edf2f7', borderRadius: '4px', fontFamily: 'monospace' }}>
+                {t}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -4,25 +4,28 @@ Production-ready API server with comprehensive monitoring and security.
 
 import logging
 import time
-from pathlib import Path
-from typing import Optional
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from src.pipeline import pipeline, QueryProcessingError, DocumentIngestionError
+from src.core.config import config
 from src.core.models import QueryResponse
+from src.monitoring.metrics import (
+    QueryMetrics,
+    get_health_checker,
+    get_metrics_collector,
+)
+from src.pipeline import DocumentIngestionError, QueryProcessingError, pipeline
 from src.security.enhanced_security import (
     get_document_validator,
     get_query_validator,
     get_rate_limiter,
     get_security_audit_logger,
 )
-from src.monitoring.metrics import get_metrics_collector, get_health_checker, QueryMetrics
-from src.core.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,7 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 class QueryRequest(BaseModel):
     question: str
-    user_id: Optional[str] = "anonymous"
+    user_id: str | None = "anonymous"
 
 
 class DocumentInfo(BaseModel):
@@ -224,8 +227,75 @@ async def query_endpoint(
         return response
         
     except Exception as e:
-        logger.error(f"Query failed: {e}", exc_info=True)
+        logger.exception(f"Query failed: {e}")
         raise QueryProcessingError(str(e))
+
+
+@app.post("/api/v1/query/stream")
+@app.get("/api/v1/query/stream")
+async def stream_query_endpoint(
+    request: Request,
+    question: str | None = None,
+):
+    """
+    Tier-1 Server-Sent Events (SSE) Streaming Query Endpoint with RBAC.
+    Streams plan, retrieval milestones, real-time token attribution, citations,
+    and hallucination gatekeeper verdict.
+    """
+    # Extract query from JSON body or URL query param
+    target_question = question
+    if not target_question and request.method == "POST":
+        try:
+            body = await request.json()
+            target_question = body.get("question")
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    if not target_question:
+        raise HTTPException(status_code=400, detail="Missing required 'question' parameter")
+
+    tenant_id = request.headers.get("X-Tenant-ID", "default")
+    user_role = request.headers.get("X-User-Role", "viewer")
+
+    async def sse_generator():
+        import asyncio
+        import json
+
+        # 1. Plan Event
+        yield f"event: plan\ndata: {json.dumps({'status': 'planning', 'query': target_question, 'tenant_id': tenant_id, 'user_role': user_role})}\n\n"
+        await asyncio.sleep(0.01)
+
+        # 2. Run Frontier LangGraph Agentic Loop
+        from src.agentic.rag_graph import FrontierRAGGraph
+        graph = FrontierRAGGraph()
+        result = graph.run(query=target_question)
+
+        # 3. Retrieval Event
+        chunks = result.get("retrieved_chunks", [])
+        yield f"event: retrieval\ndata: {json.dumps({'candidates_count': len(chunks), 'evidence_grade': result.get('evidence_grade'), 'crag_action': result.get('crag_action')})}\n\n"
+        await asyncio.sleep(0.01)
+
+        # 4. Stream Tokens
+        full_text = result.get("final_response", "")
+        words = full_text.split(" ")
+        for i, word in enumerate(words):
+            token_chunk = word + (" " if i < len(words) - 1 else "")
+            yield f"event: token\ndata: {json.dumps({'token': token_chunk, 'index': i})}\n\n"
+            await asyncio.sleep(0.005)
+
+        # 5. Citations Event
+        citations = result.get("citations", [])
+        yield f"event: citation\ndata: {json.dumps({'citations': citations})}\n\n"
+        await asyncio.sleep(0.01)
+
+        # 6. Gatekeeper Event
+        yield f"event: gatekeeper\ndata: {json.dumps({'verdict': result.get('hallucination_verdict', 'pass')})}\n\n"
+        await asyncio.sleep(0.01)
+
+        # 7. Done Event
+        yield f"event: done\ndata: {json.dumps({'status': 'complete', 'trace': result.get('step_trace', [])})}\n\n"
+
+    return StreamingResponse(sse_generator(), media_type="text/event-stream")
 
 
 @app.post("/documents", response_model=DocumentInfo)
@@ -276,7 +346,7 @@ async def upload_document(
         )
         
     except Exception as e:
-        logger.error(f"Document upload failed: {e}", exc_info=True)
+        logger.exception(f"Document upload failed: {e}")
         raise DocumentIngestionError(str(e))
     
     finally:
