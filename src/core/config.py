@@ -111,6 +111,19 @@ class SecurityConfig:
 
 
 @dataclass
+class QdrantConfig:
+    """Configuration for enterprise Qdrant vector database."""
+    host: str = "localhost"
+    port: int = 6333
+    grpc_port: int = 6334
+    api_key: Optional[str] = None
+    collection_name: str = "rag_documents"
+    use_memory: bool = False
+    prefer_grpc: bool = False
+    vector_store_type: Literal["chroma", "qdrant"] = "qdrant"
+
+
+@dataclass
 class MonitoringConfig:
     """Configuration for monitoring and observability."""
     enable_tracing: bool = True
@@ -140,6 +153,7 @@ class AppConfig:
     generation: GenerationConfig = field(default_factory=GenerationConfig)
     evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
     docling: DoclingConfig = field(default_factory=DoclingConfig)
+    qdrant: QdrantConfig = field(default_factory=QdrantConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
